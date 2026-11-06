@@ -1,0 +1,20 @@
+blueboat_ppo_controller:
+  ros__parameters:
+    mode: shadow
+    enable_actuators: false
+    deployment_target: sitl
+    calibration_file: ""
+    model_directory: ""
+    command_topic: /blueboat/cmd_vel
+    enable_topic: /blueboat/enable
+    odometry_topic: /mavros/local_position/odom
+    imu_topic: /mavros/imu/data
+    estimator_topic: /mavros/estimator_status
+    state_topic: /mavros/state
+    rc_input_topic: /mavros/rc/in
+    rc_override_topic: /mavros/rc/override
+    world_frame: map
+    body_frame: base_link
+    telemetry_timeout_s: 0.2
+    command_timeout_s: 0.5
+    watchdog_timeout_s: 0.1

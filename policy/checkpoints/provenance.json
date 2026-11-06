@@ -1,0 +1,13 @@
+{
+  "source_repository": "https://github.com/nico-bohlinger/loco_mjx",
+  "source_commit": "05ffc1b9aa0f016253dff255ad37d7882310f36b",
+  "source_checkpoint_sha256": "43213ea3bc2219d93acf991fdb74c02a559c1d2ed77a8af266138474eb1269e4",
+  "original_checkpoint_bytes": 7141893,
+  "copied_source_files": {
+    "experiments/gazebo_blueboat/bridge.py": "8486fe0968b06be44a65e775070c3d0298df59818f4e5f7d30c5c1078acfbfce",
+    "loco_mjx/environments/robots/blueboat/dynamics.py": "6bae26686496d6dff0cd43b7015ae7cb60f3c5f0b5806940692895ca788786f1",
+    "loco_mjx/environments/robots/blueboat/waves.py": "9b367c34f61ab6efd917b795ada7f460829d66ba89482b2e3aadf22926f2a486",
+    "loco_mjx/environments/robots/blueboat/data/plane.xml": "7f82a17da6218cb9af50ef2d5f52a73882a748b1f44f4e770b155139141fbdbf",
+    "loco_mjx/environments/robots/blueboat/data/assets/hull.obj": "3422a264a6ae08bc9e2d810dd0d6f6fb2e6ea492c44e4e9f3a815ba37bd20ff2"
+  }
+}

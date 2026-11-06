@@ -1,0 +1,24 @@
+{
+  "platform": "macOS-26.3-arm64-arm-64bit-Mach-O",
+  "python": "3.14.3",
+  "numpy": "2.5.4",
+  "scipy": "1.18.1",
+  "onnxruntime": "1.31.1",
+  "pytest_passed": 28,
+  "pytest_skipped": 1,
+  "skip_reason": "rclpy unavailable; real ROS message serialization not run",
+  "wheel_isolated_inference": {
+    "raw_action": [
+      0.6399058699607849,
+      1.2262927293777466
+    ],
+    "requested_left_right_N": [
+      15.997646749019623,
+      25.0
+    ],
+    "inference_median_ms": 0.06533297710120678,
+    "inference_p99_ms": 0.08316864958032966,
+    "actuator_output": false
+  },
+  "ros_sitl_executed": false
+}

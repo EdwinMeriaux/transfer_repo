@@ -1,0 +1,129 @@
+{
+  "platform": "macOS-26.3-arm64-arm-64bit-Mach-O",
+  "source_commit": "05ffc1b9aa0f016253dff255ad37d7882310f36b",
+  "checkpoint_sha256": "43213ea3bc2219d93acf991fdb74c02a559c1d2ed77a8af266138474eb1269e4",
+  "gazebo_episodes": [
+    {
+      "reference": "constant_speed",
+      "standalone_onnx_rmse": [
+        0.04872459951536356,
+        0.006619117754092167
+      ],
+      "original_jax_rmse": [
+        0.04872468568829138,
+        0.0066191216389461655
+      ],
+      "absolute_rmse_difference": [
+        8.617292782120423e-08,
+        3.8848539983885044e-09
+      ],
+      "controls": 1200,
+      "stable": true
+    },
+    {
+      "reference": "changing_speed",
+      "standalone_onnx_rmse": [
+        0.15255403482551236,
+        0.006372285299053062
+      ],
+      "original_jax_rmse": [
+        0.15255404871187322,
+        0.00637228149226862
+      ],
+      "absolute_rmse_difference": [
+        1.3886360866743885e-08,
+        3.8067844423603225e-09
+      ],
+      "controls": 1200,
+      "stable": true
+    },
+    {
+      "reference": "positive_yaw",
+      "standalone_onnx_rmse": [
+        0.0358968368567146,
+        0.08938543243623745
+      ],
+      "original_jax_rmse": [
+        0.03589687403254183,
+        0.08938541073180524
+      ],
+      "absolute_rmse_difference": [
+        3.717582722911894e-08,
+        2.1704432209834756e-08
+      ],
+      "controls": 1200,
+      "stable": true
+    },
+    {
+      "reference": "negative_yaw",
+      "standalone_onnx_rmse": [
+        0.06723301734378638,
+        0.034429928442820855
+      ],
+      "original_jax_rmse": [
+        0.06723329445995094,
+        0.03442980334956376
+      ],
+      "absolute_rmse_difference": [
+        2.7711616455705634e-07,
+        1.2509325709314512e-07
+      ],
+      "controls": 1200,
+      "stable": true
+    },
+    {
+      "reference": "sinusoidal_yaw",
+      "standalone_onnx_rmse": [
+        0.04767701837290176,
+        0.10567740135150919
+      ],
+      "original_jax_rmse": [
+        0.04767717118582911,
+        0.10567734403569122
+      ],
+      "absolute_rmse_difference": [
+        1.52812927353696e-07,
+        5.7315817966752114e-08
+      ],
+      "controls": 1200,
+      "stable": true
+    },
+    {
+      "reference": "combined",
+      "standalone_onnx_rmse": [
+        0.06472558285739258,
+        0.14881716161865186
+      ],
+      "original_jax_rmse": [
+        0.06472570564551407,
+        0.14881712483436366
+      ],
+      "absolute_rmse_difference": [
+        1.2278812148991403e-07,
+        3.6784288198754567e-08
+      ],
+      "controls": 1200,
+      "stable": true
+    }
+  ],
+  "gazebo_mean_rmse": [
+    0.06946851496194521,
+    0.06521688781706077
+  ],
+  "mjx_positive_yaw": {
+    "standalone": {
+      "rmse": [
+        0.03479604050517082,
+        0.07351324707269669
+      ],
+      "duration_s": 24.0,
+      "finite": true
+    },
+    "original_jax_rmse": [
+      0.034795430251385706,
+      0.07351258381222303
+    ]
+  },
+  "ros_sitl_executed": false,
+  "physical_boat_executed": false
+}

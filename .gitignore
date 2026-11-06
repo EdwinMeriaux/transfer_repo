@@ -1,0 +1,12 @@
+.venv*/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+install/
+log/
+artifacts/
+*.db3
+*.mcap
+.DS_Store

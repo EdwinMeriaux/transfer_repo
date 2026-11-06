@@ -1,0 +1,14 @@
+{
+  "samples": 1024,
+  "max_abs_raw_action_error": 2.115964889526367e-06,
+  "mean_abs_raw_action_error": 5.479287210619077e-07,
+  "atol": 2e-05,
+  "rtol": 2e-05,
+  "source_checkpoint_sha256": "43213ea3bc2219d93acf991fdb74c02a559c1d2ed77a8af266138474eb1269e4",
+  "onnx_sha256": "63cf44c2461a1819d32aa31245370dc3d4001b3ba05da5f85bda56d6157cb8fd",
+  "onnx_bytes": 1520697,
+  "opset": 17,
+  "ir_version": 9,
+  "runtime": "1.31.1",
+  "passed": true
+}

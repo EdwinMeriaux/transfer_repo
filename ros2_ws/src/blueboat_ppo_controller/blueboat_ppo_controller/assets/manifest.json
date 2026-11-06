@@ -1,0 +1,7 @@
+{
+  "source_checkpoint_sha256": "43213ea3bc2219d93acf991fdb74c02a559c1d2ed77a8af266138474eb1269e4",
+  "files": {
+    "observation_contract.json": "01fc3a2f7b3890c732c566df888460db1b3c99ef2685144e402ee21aef9566a7",
+    "blueboat_actor.onnx": "63cf44c2461a1819d32aa31245370dc3d4001b3ba05da5f85bda56d6157cb8fd"
+  }
+}

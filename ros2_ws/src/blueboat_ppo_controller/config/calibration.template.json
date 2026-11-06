@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "verified": false,
+  "target": "sitl",
+  "vehicle_id": "REPLACE_WITH_TESTED_VEHICLE",
+  "firmware_version": "REPLACE_WITH_MEASURED_ARDUROVER_VERSION",
+  "sysid": 1,
+  "compid": 1,
+  "flight_sw_version": 0,
+  "uid": 0,
+  "evidence_file": "measured-calibration.csv",
+  "evidence_sha256": "REQUIRED",
+  "left_right_verified": false,
+  "neutral_verified": false,
+  "manual_takeover_tested": false,
+  "override_timeout_tested": false,
+  "gcs_failsafe_tested": false,
+  "sitl_test_passed": false,
+  "restrained_motor_test_passed": false,
+  "maximum_abs_force_N": 3.0,
+  "enable_rc_channel": 7,
+  "left": {
+    "rc_channel": 1,
+    "servo_output": 1,
+    "neutral_pwm": null,
+    "force_pwm_points": []
+  },
+  "right": {
+    "rc_channel": 3,
+    "servo_output": 3,
+    "neutral_pwm": null,
+    "force_pwm_points": []
+  },
+  "expected_parameters": {},
+  "paired_motor_test_passed": false
+}

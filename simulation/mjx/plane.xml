@@ -1,0 +1,78 @@
+<mujoco model="blueboat">
+  <compiler angle="radian" />
+  <option timestep="0.005" gravity="0 0 -9.81" />
+  <asset>
+    <texture name="boat_sky" type="skybox" builtin="gradient" rgb1="0.30 0.53 0.72" rgb2="0.78 0.86 0.90" width="512" height="3072" />
+    <material name="boat_hull" rgba="0.94 0.30 0.055 1" specular="0.35" shininess="0.45" reflectance="0.08" />
+    <material name="boat_hatch" rgba="0.055 0.075 0.085 1" specular="0.35" shininess="0.45" reflectance="0.12" />
+    <material name="boat_metal" rgba="0.55 0.61 0.65 1" specular="0.35" shininess="0.45" reflectance="0.3" />
+    <material name="boat_rubber" rgba="0.025 0.035 0.04 1" specular="0.35" shininess="0.45" reflectance="0.02" />
+    <mesh name="boat_hull_mesh" file="assets/hull.obj" />
+  </asset>
+  <default>
+    <default class="reward_collision_sphere">
+      <geom type="sphere" group="5" mass="0" contype="0" conaffinity="0" rgba="0 0 0 0" />
+    </default>
+  </default>
+  <custom>
+    <numeric name="blueboat_drag" data="5.058129948918448 6.276322613505225 319.1882148968655 0.0 8.395924725133243 2.666856626041346 0.04353173116693914 32.16665998559846 0.6352140762660325 0.7612899285756016 0.01 0.8460743810216815" />
+  </custom>
+  <worldbody>
+    <light name="sun" pos="-3 -4 6" dir=".4 .5 -1" diffuse=".85 .85 .8" ambient=".3 .35 .4" />
+    <geom name="floor" type="plane" size="100 100 0.01" pos="0 0 -.10" rgba="0.025 0.21 0.24 1" contype="0" conaffinity="0" />
+    <body name="trunk">
+      <camera name="track" mode="trackcom" pos="1 -2 1" xyaxes="1 0.5 0 -0.2 0.4 1" />
+      <site name="imu" pos="0 0 0" />
+      <geom name="hull_bounds" class="reward_collision_sphere" type="sphere" size="0.6" mass="0" group="5" contype="0" conaffinity="0" rgba="0 0 0 0" />
+      <joint name="world_x" type="slide" axis="1 0 0" damping="0" />
+      <joint name="world_y" type="slide" axis="0 1 0" damping="0" />
+      <joint name="yaw" type="hinge" axis="0 0 1" damping="0" />
+      <inertial pos="-0.05558032786885246 0.0 -0.15110819672131148" mass="30.5" diaginertia="2.66676614295082 4.207806471147541 5.951260328196722" />
+      <geom name="port_hull" type="mesh" pos="0 0.35 -0.05" contype="0" conaffinity="0" mesh="boat_hull_mesh" material="boat_hull" mass="0" group="2" />
+      <geom name="starboard_hull" type="mesh" pos="0 -0.35 -0.05" contype="0" conaffinity="0" mesh="boat_hull_mesh" material="boat_hull" mass="0" group="2" />
+      <geom name="port_hatch" type="box" pos="-0.01 0.35 0.07" size="0.29 0.090 0.037" contype="0" conaffinity="0" material="boat_hatch" />
+      <geom name="starboard_hatch" type="box" pos="-0.01 -0.35 0.07" size="0.29 0.090 0.037" contype="0" conaffinity="0" material="boat_hatch" />
+      <geom name="front_crossbar" type="box" pos="0.30 0 0.11" size="0.020 0.36 0.020" contype="0" conaffinity="0" material="boat_metal" />
+      <geom name="rear_crossbar" type="box" pos="-0.30 0 0.11" size="0.020 0.36 0.020" contype="0" conaffinity="0" material="boat_metal" />
+      <geom name="mast" type="cylinder" pos=".04 0 .19" size=".009 .065" rgba="0.10 0.10 0.10 1" contype="0" conaffinity="0" />
+      <geom name="port_motor" type="capsule" fromto="-0.53 0.32 -0.09 -0.38 0.32 -0.09" size="0.038" rgba="0.16 0.19 0.22 1" contype="0" conaffinity="0" />
+      <geom name="starboard_motor" type="capsule" fromto="-0.53 -0.32 -0.09 -0.38 -0.32 -0.09" size="0.038" rgba="0.16 0.19 0.22 1" contype="0" conaffinity="0" />
+      <site name="left_thruster_site" pos="-0.4 0.295 -0.09" size="0.013" rgba="0.15 0.4 0.95 1" />
+      <site name="right_thruster_site" pos="-0.4 -0.295 -0.09" size="0.013" rgba="0.15 0.4 0.95 1" />
+      <geom name="boat_visual_port_bolt_-0.26_-0.07" type="cylinder" pos="-0.26 0.27999999999999997 .111" size=".005 .002" material="boat_metal" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_port_bolt_-0.26_0.07" type="cylinder" pos="-0.26 0.42 .111" size=".005 .002" material="boat_metal" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_port_bolt_0.24_-0.07" type="cylinder" pos="0.24 0.27999999999999997 .111" size=".005 .002" material="boat_metal" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_port_bolt_0.24_0.07" type="cylinder" pos="0.24 0.42 .111" size=".005 .002" material="boat_metal" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_port_handle_-0.19" type="capsule" fromto="-0.19 0.31 .115 -0.19 0.38999999999999996 .115" size=".008" material="boat_rubber" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_port_handle_0.17" type="capsule" fromto="0.17 0.31 .115 0.17 0.38999999999999996 .115" size=".008" material="boat_rubber" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_port_stern_bracket" type="box" pos="-.49 0.35 .006" size=".035 .045 .05" material="boat_metal" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_port_skeg" type="box" pos="-.27 0.35 -.175" size=".18 .006 .015" material="boat_hull" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_port_prop_0" type="ellipsoid" pos="-.55 0.35 -0.05499999999999999" size=".006 .022 .045" euler="0.0 0 0" material="boat_rubber" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_port_prop_1" type="ellipsoid" pos="-.55 0.3803108891324553 -0.10749999999999998" size=".006 .022 .045" euler="2.0943951023931953 0 0" material="boat_rubber" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_port_prop_2" type="ellipsoid" pos="-.55 0.31968911086754465 -0.10750000000000001" size=".006 .022 .045" euler="4.1887902047863905 0 0" material="boat_rubber" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_starboard_bolt_-0.26_-0.07" type="cylinder" pos="-0.26 -0.42 .111" size=".005 .002" material="boat_metal" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_starboard_bolt_-0.26_0.07" type="cylinder" pos="-0.26 -0.27999999999999997 .111" size=".005 .002" material="boat_metal" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_starboard_bolt_0.24_-0.07" type="cylinder" pos="0.24 -0.42 .111" size=".005 .002" material="boat_metal" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_starboard_bolt_0.24_0.07" type="cylinder" pos="0.24 -0.27999999999999997 .111" size=".005 .002" material="boat_metal" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_starboard_handle_-0.19" type="capsule" fromto="-0.19 -0.38999999999999996 .115 -0.19 -0.31 .115" size=".008" material="boat_rubber" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_starboard_handle_0.17" type="capsule" fromto="0.17 -0.38999999999999996 .115 0.17 -0.31 .115" size=".008" material="boat_rubber" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_starboard_stern_bracket" type="box" pos="-.49 -0.35 .006" size=".035 .045 .05" material="boat_metal" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_starboard_skeg" type="box" pos="-.27 -0.35 -.175" size=".18 .006 .015" material="boat_hull" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_starboard_prop_0" type="ellipsoid" pos="-.55 -0.35 -0.05499999999999999" size=".006 .022 .045" euler="0.0 0 0" material="boat_rubber" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_starboard_prop_1" type="ellipsoid" pos="-.55 -0.31968911086754465 -0.10749999999999998" size=".006 .022 .045" euler="2.0943951023931953 0 0" material="boat_rubber" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_starboard_prop_2" type="ellipsoid" pos="-.55 -0.3803108891324553 -0.10750000000000001" size=".006 .022 .045" euler="4.1887902047863905 0 0" material="boat_rubber" mass="0" contype="0" conaffinity="0" group="2" />
+      <geom name="boat_visual_antenna" type="cylinder" pos=".04 0 .255" size=".018 .015" material="boat_rubber" mass="0" contype="0" conaffinity="0" group="2" />
+    </body>
+  </worldbody>
+  <actuator>
+    <motor name="left_thruster" site="left_thruster_site" gear="1 0 0 0 0 0" ctrllimited="true" ctrlrange="-15.0 25.0" forcelimited="true" forcerange="-15.0 25.0" />
+    <motor name="right_thruster" site="right_thruster_site" gear="1 0 0 0 0 0" ctrllimited="true" ctrlrange="-15.0 25.0" forcelimited="true" forcerange="-15.0 25.0" />
+  </actuator>
+  <sensor>
+    <velocimeter name="imu_linear_velocity" site="imu" />
+    <gyro name="imu_angular_velocity" site="imu" />
+  </sensor>
+  <keyframe>
+    <key name="home" qpos="0 0 0" ctrl="0 0" />
+  </keyframe>
+</mujoco>

@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=7,<10
+onnx>=1.16,<2
+build>=1,<2
