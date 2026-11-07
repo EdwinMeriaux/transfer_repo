@@ -1,0 +1,10 @@
+{
+  "mass_std_kg": 0.0,
+  "added_mass_kg": 0.0,
+  "added_mass_std_kg": 0.0,
+  "accelerometer_semantics": "specific_force",
+  "imu_offset_flu_m": [0.0, 0.0, 0.0],
+  "initial_start_s": 0.08,
+  "initial_end_s": 0.30,
+  "max_interpolation_gap_pwm": 30.0
+}

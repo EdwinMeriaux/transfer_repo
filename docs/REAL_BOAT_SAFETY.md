@@ -12,6 +12,8 @@ For separable measured curves, this adapter requires `MANUAL_STR_EXPO=0`, `MANUA
 
 ## Produce measured calibration, separately for SITL and hardware
 
+For the separate IMU-based effective-response workflow, use [THRUST_CALIBRATION.md](THRUST_CALIBRATION.md). `motor_interface.template.json` verifies PWM mappings/neutral/takeover independently of a force curve, so calibration does not require an existing force calibration. The optional effective lookup path preserves these identity/failsafe gates, adds explicit assumptions/identifiability acceptance, and rejects unmeasured force regions. The full-force-range requirement below applies to the legacy `force_pwm_points` path. IMU mass-times-acceleration results are not measured static propeller thrust, and symmetric results cannot automatically supply independent motor curves.
+
 Copy `config/calibration.template.json` into an ignored local `artifacts/calibration/` directory. Keep `verified: false` until all evidence is collected. The numbers 1/3/7 in the template are **candidate channel locations**, not verified wiring. No force/PWM samples or neutral values are supplied.
 
 1. Save the vehicle's firmware version, `flight_sw_version`, UID, sysid/compid, complete parameter dump, MAVROS version and SITL/Gazebo plugin revisions. Hardware requires a nonzero UID. Use `/mavros/vehicle_info_get`; the human-readable version label alone is insufficient.

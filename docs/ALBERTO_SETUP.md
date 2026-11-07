@@ -10,11 +10,11 @@ We provide the trained model, exact observation adapter, ONNX CPU inference, ROS
 
 ## 1. Clone and install inference dependencies
 
-Use the feature branch until it is reviewed and merged. Commands below use bash and place the checkout at `~/gazebo_blue_boat`; use that location consistently or substitute your chosen path.
+Commands below use bash and place the checkout at `~/gazebo_blue_boat`; use that location consistently or substitute your chosen path.
 
 ```bash
 cd ~
-git clone --branch feature/ppo-deployment-package https://github.com/EdwinMeriaux/gazebo_blue_boat.git
+git clone --branch main https://github.com/EdwinMeriaux/gazebo_blue_boat.git
 cd ~/gazebo_blue_boat
 source /opt/ros/humble/setup.bash
 sudo apt-get install python3-venv python3-pip python3-colcon-common-extensions
@@ -127,6 +127,8 @@ python ~/gazebo_blue_boat/scripts/analyze_log.py ~/.ros/blueboat/controller-REPL
 Replace the filename with the actual log. The analyzer reports valid-sample speed/yaw RMSE, inference p99 and status counts. For closed-loop acceptance, run fixed-duration commands from rest, retain all start/stop/fault intervals, record the force cap and compare target/actual using the same metrics. A fault-free fast inference test alone does not verify end-to-end latency or thrust delivery.
 
 ## 6. Complete mapping/calibration before SITL actuation
+
+The new [IMU calibration guide](THRUST_CALIBRATION.md) provides telemetry-only recording, dry-run pulses, synthetic analysis/plots and opt-in live SITL acceptance. It separates verified motor-interface evidence from measured force curves. Its effective surge estimates require additional assumptions/review before optional integration through `MotorAdapter`; no PPO model or observation/action definition changes are needed.
 
 Read and perform [REAL_BOAT_SAFETY.md](REAL_BOAT_SAFETY.md). Copy `calibration.template.json` into `artifacts/calibration/`, measure the actual force-versus-RC-input mapping through your simulator/ArduPilot chain, and record identity, parameters and takeover/failsafe evidence. The template is not runnable actuation configuration. The synthetic pytest calibration is **never** a vehicle calibration.
 

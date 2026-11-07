@@ -26,6 +26,7 @@ flowchart LR
 | Observation/network specification | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
 | Topics and services | [`docs/ROS_INTERFACES.md`](docs/ROS_INTERFACES.md) |
 | Calibration and real-boat gates | [`docs/REAL_BOAT_SAFETY.md`](docs/REAL_BOAT_SAFETY.md) |
+| IMU effective-thrust calibration, plots and guarded inverse | [`docs/THRUST_CALIBRATION.md`](docs/THRUST_CALIBRATION.md) |
 | Reproduction and validation | [`docs/SIMULATION_VALIDATION.md`](docs/SIMULATION_VALIDATION.md) |
 | Attribution and license findings | [`docs/PROVENANCE.md`](docs/PROVENANCE.md) |
 
@@ -34,7 +35,7 @@ flowchart LR
 On Ubuntu 22.04 with ROS 2 Humble, MAVROS, colcon and their dependencies already installed:
 
 ```bash
-git clone --branch feature/ppo-deployment-package https://github.com/EdwinMeriaux/gazebo_blue_boat.git
+git clone --branch main https://github.com/EdwinMeriaux/gazebo_blue_boat.git
 cd gazebo_blue_boat
 source /opt/ros/humble/setup.bash
 /usr/bin/python3 -m venv --system-site-packages .venv
@@ -67,3 +68,5 @@ python -m pytest -q
 ```
 
 Tests explicitly skip real ROS message serialization when ROS 2 is unavailable. Transport-mocked node tests are separately identified. See the validation report for what actually ran.
+
+The separate `thrust_calibration` executable defaults to telemetry-only and has no motor publisher in telemetry/dry-run modes. It records IMU/attitude/velocity/PWM, supports guarded short single/symmetric motor pulses, and fits draft forward/reverse **effective surge-force** tables using configurable total mass. Follow [Alberto's calibration guide](docs/THRUST_CALIBRATION.md) for synthetic tests, live SITL acceptance, physical assumptions and optional PPO integration. These estimates are not static propeller thrust, and independent motor forces are not automatically identified.

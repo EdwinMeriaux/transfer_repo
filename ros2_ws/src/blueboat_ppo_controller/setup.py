@@ -10,4 +10,8 @@ setup(name='blueboat_ppo_controller', version='0.1.0',
         ('share/blueboat_ppo_controller/config', glob('config/*')),
         ('share/blueboat_ppo_controller/launch', glob('launch/*.py'))],
     install_requires=['setuptools', 'numpy>=1.24,<3', 'scipy>=1.10,<2', 'onnxruntime>=1.17,<2'],
-    entry_points={'console_scripts': ['ppo_node = blueboat_ppo_controller.ppo_node:main', 'inference_test = blueboat_ppo_controller.inference_test:main']})
+    extras_require={'calibration': ['matplotlib>=3.6,<4']},
+    entry_points={'console_scripts': ['ppo_node = blueboat_ppo_controller.ppo_node:main', 'inference_test = blueboat_ppo_controller.inference_test:main',
+        'thrust_calibration = blueboat_ppo_controller.calibration_node:main',
+        'calibration_analyze = blueboat_ppo_controller.calibration_analysis:main',
+        'calibration_synthetic = blueboat_ppo_controller.calibration_synthetic:main']})

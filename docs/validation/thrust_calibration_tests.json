@@ -1,0 +1,78 @@
+{
+  "client_date": "2026-11-07",
+  "platform": "macOS arm64",
+  "python": "3.14.3",
+  "python_3_10_syntax_check": "passed; ast.parse feature_version=(3, 10), not a Humble runtime test",
+  "dependencies": {
+    "numpy": "2.5.4",
+    "scipy": "1.18.1",
+    "matplotlib": "3.11.2",
+    "onnxruntime": "1.31.1"
+  },
+  "pytest": {
+    "command": ".venv/bin/python -m pytest -q -ra",
+    "passed": 74,
+    "skipped": 4,
+    "skip_reasons": {
+      "live_ArduPilot_SITL": "3 opt-in tests skipped; ROS 2, sim_vehicle.py and a running Docker daemon unavailable locally",
+      "ROS_serialization": "1 test skipped; rclpy / ROS 2 Humble not installed"
+    },
+    "coverage": [
+      "Existing policy integrity, reference observations/actions, inference timing and controller safety",
+      "Finite signed left/right/symmetric pulse plans and bounds",
+      "Source and monotonic receipt timestamps, rate/gap/skew/frame checks",
+      "Synthetic known-force recovery using configurable mass and optional added mass",
+      "Gravity and rigid IMU lever-arm correction",
+      "Trial rejection for disturbances, invalid timing/frames/quaternion, velocity disagreement and bad actual outputs",
+      "Separate monotonic branches, uncertainty, insufficient coverage, dead-zone and inverse rejection/clipping",
+      "Draft lookup rejection and optional PPO MotorAdapter integration bound to evidence and identity",
+      "Transport-mocked telemetry/dry-run with no actuator publisher",
+      "Transport-mocked enable/mode/arm/output checks, takeover, latching, watchdog and disk failure",
+      "A stalled event log cannot hold the independent watchdog lock"
+    ]
+  },
+  "package": {
+    "editable_install_with_calibration_extra": "passed",
+    "sdist_and_wheel_build": "passed",
+    "wheel_current_source_configs_and_launch_contents": "passed",
+    "compileall": "passed",
+    "git_diff_check": "passed"
+  },
+  "installed_offline_demo": {
+    "commands": [
+      ".venv/bin/calibration_synthetic artifacts/calibration-demo/synthetic.csv --mass-kg 42.5",
+      ".venv/bin/calibration_analyze artifacts/calibration-demo/synthetic.csv --mass-kg 42.5 --left-neutral 1500 --right-neutral 1500 --metadata artifacts/calibration-demo/synthetic.json --output artifacts/calibration-demo/report-final"
+    ],
+    "synthetic_mass_kg": 42.5,
+    "accepted_trials": 36,
+    "rejected_trials": 0,
+    "branches": 6,
+    "plots": ["timeseries.png", "lookup.png"],
+    "lookup_verified": false,
+    "independent_mapping_reviewed": false,
+    "note": "Synthetic software evidence only; not a physical boat calibration"
+  },
+  "inference_test": {
+    "command": ".venv/bin/inference_test",
+    "passed": true,
+    "raw_action": [0.6399058699607849, 1.2262927293777466],
+    "requested_left_right_N": [15.997646749019623, 25.0],
+    "actuator_output": false
+  },
+  "not_executed": [
+    "ROS 2 Humble / colcon runtime, real message serialization and QoS discovery",
+    "Live ArduPilot SITL pulse, enable-loss and process-stall acceptance tests",
+    "Installation-specific SITL receiver/GCS/network/estimator/failsafe fault injections",
+    "Any powered physical-boat trial"
+  ],
+  "physical_assumptions_unverified": [
+    "Actual topics, units, FLU/ENU frames, gravity convention, source clocks and rates",
+    "Motor input/servo mapping, forward/reverse signs, neutral/deadband and independent PWM delivery",
+    "Vehicle/firmware identity, MANUAL behavior, physical override and all failsafe timing",
+    "Actual total mass, payload/battery dependence, centre of mass and IMU position/alignment",
+    "Water-relative speed/current, hydrodynamic drag and added mass",
+    "Yaw inertia/damping, lever-arm correction adequacy and propeller/ESC delay",
+    "Repeatability, independent effective motor identifiability and applicability to PPO Newton commands"
+  ],
+  "trained_model_observation_and_action_definitions_changed": false
+}
