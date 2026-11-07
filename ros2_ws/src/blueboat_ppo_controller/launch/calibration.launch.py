@@ -8,7 +8,7 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     default = PathJoinSubstitution([FindPackageShare('blueboat_ppo_controller'), 'config', 'thrust_calibration.yaml'])
-    types = dict(mode=('telemetry', str), enable_powered=('false', bool), deployment_target=('sitl', str),
+    types = dict(mode=('dry_run', str), enable_powered=('false', bool), deployment_target=('sitl', str),
                  interface_file=('', str), use_sim_time=('false', bool))
     return LaunchDescription([DeclareLaunchArgument('config', default_value=default)] + [
         DeclareLaunchArgument(name, default_value=value) for name,(value, _) in types.items()] + [

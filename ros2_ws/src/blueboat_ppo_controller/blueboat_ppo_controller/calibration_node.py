@@ -1,4 +1,4 @@
-"""Telemetry-first ROS 2 calibration. No arming, mode-setting or parameter writes."""
+"""Dry-run by default. No arming, mode-setting or parameter writes."""
 import json
 import signal
 import threading
@@ -21,7 +21,7 @@ from rcl_interfaces.srv import GetParameters
 
 from .mavros_interface import rc_override
 from .motor_interface import MotorInterface
-from .thrust_calibration import PulsePlan, Recorder, StreamCheck
+from .thrust_calibration import PulsePlan, Recorder, RestCheck, StreamCheck
 
 
 def stamp(message):
@@ -35,7 +35,7 @@ def xyz(vector):
 class CalibrationNode(Node):
     def __init__(self):
         super().__init__('blueboat_thrust_calibration')
-        defaults = dict(mode='telemetry', enable_powered=False, deployment_target='sitl', interface_file='',
+        defaults = dict(mode='dry_run', enable_powered=False, deployment_target='sitl', interface_file='',
             mass_kg=0., log_directory='', body_frame='base_link', world_frame='map',
             raw_imu_topic='/mavros/imu/data_raw', attitude_topic='/mavros/imu/data',
             velocity_topic='/mavros/local_position/odom', velocity_type='odometry',
@@ -46,7 +46,8 @@ class CalibrationNode(Node):
             param_get_service='/mavros/param/get_parameters', telemetry_timeout_s=.2, max_skew_s=.05,
             max_gap_s=.15, min_raw_rate_hz=40., min_attitude_rate_hz=20., min_velocity_rate_hz=10.,
             min_output_rate_hz=5., require_output_feedback=True, watchdog_timeout_s=.1,
-            baseline_s=2., pulse_s=.5, recovery_s=3., repeats=3, delta_pwm=[-40, 40],
+            baseline_s=2., rest_duration_s=1., rest_max_gap_s=.06,
+            pulse_s=.5, recovery_s=3., repeats=3, delta_pwm=[-40, -60, 40, 60],
             sides=['left', 'right', 'symmetric'], max_delta_pwm=60, dry_run_neutral_pwm=[1500, 1500],
             output_neutral_tolerance_pwm=15, output_response_grace_s=.15,
             output_min_response_pwm=3, accelerometer_semantics='specific_force',
@@ -72,6 +73,9 @@ class CalibrationNode(Node):
                 or type(s['output_min_response_pwm']) is not int or not 1 <= s['output_min_response_pwm'] <= 50):
             raise ValueError('Invalid acceleration semantics or output response threshold')
         self.plan = PulsePlan(s['delta_pwm'], s['sides'], s['repeats'], s['baseline_s'], s['pulse_s'], s['recovery_s'], s['max_delta_pwm'])
+        if not .5 <= s['rest_duration_s'] <= s['baseline_s']-.1 or not 0 < s['rest_max_gap_s'] <= .1:
+            raise ValueError('Rest verification needs >=0.5 s, room in baseline, and <=0.1 s sample gaps')
+        self.rest = RestCheck(s['rest_duration_s'], s['rest_max_gap_s'])
         self.motor = None
         if s['mode'] == 'powered':
             if not s['enable_powered'] or s['mass_kg'] <= 0:
@@ -164,6 +168,7 @@ class CalibrationNode(Node):
     def invalid(self, name, error):
         self.latest.pop(name, None)
         self.streams[name].last_error = str(error)
+        self.rest.reset()
         if self.owns_output:
             self.stop(name+': '+str(error))
 
@@ -215,6 +220,7 @@ class CalibrationNode(Node):
                 raise ValueError('invalid_raw_imu_or_frame')
             # Raw orientation is intentionally ignored: MAVROS declares it unavailable.
             self.accept('raw', message)
+            self.observe_rest(message)
         except Exception as exception:
             error = str(exception)
             self.invalid('raw', exception)
@@ -223,6 +229,29 @@ class CalibrationNode(Node):
         except Exception as exception:
             self.stop('recording_failed: '+str(exception))
             self.get_logger().error('CSV recording failed; calibration stopped')
+
+    def observe_rest(self, raw):
+        stationary = False
+        if self.phase == 'baseline' and self.plan.started is not None:
+            attitude, velocity = (self.latest.get(k) for k in ('attitude', 'velocity'))
+            if (attitude and velocity
+                    and max(abs(stamp(raw)-stamp(attitude)), abs(stamp(raw)-stamp(velocity))) <= self.settings['max_skew_s']):
+                from scipy.spatial.transform import Rotation
+                q = attitude.orientation
+                acceleration = np.array(xyz(raw.linear_acceleration))
+                if self.settings['accelerometer_semantics'] == 'specific_force':
+                    acceleration += Rotation.from_quat([q.x,q.y,q.z,q.w]).inv().apply([0,0,-9.80665])
+                stationary = (np.linalg.norm(self.body_velocity()) <= .08
+                    and np.linalg.norm(xyz(raw.angular_velocity)) <= .10 and np.linalg.norm(acceleration) <= .6)
+                if self.motor:
+                    stationary &= self.command == self.neutral
+                    if self.settings['require_output_feedback']:
+                        output = self.latest.get('output')
+                        stationary &= bool(output and 0 <= self.ros_now()-stamp(output) <= self.settings['telemetry_timeout_s']
+                            and all(len(output.channels) >= self.motor.config[side]['servo_output']
+                                and abs(output.channels[self.motor.config[side]['servo_output']-1]-self.motor.config[side]['servo_neutral_pwm'])
+                                    <= self.settings['output_neutral_tolerance_pwm'] for side in ('left','right')))
+        self.rest.observe(time.monotonic(), stationary)
 
     def record_sample(self, raw, error):
         attitude, velocity, output = (self.latest.get(k) for k in ('attitude', 'velocity', 'output'))
@@ -389,20 +418,15 @@ class CalibrationNode(Node):
                 previous = self.current_trial, self.phase
                 self.current_trial, self.phase, self.planned, self.trial = self.plan.step(now, self.neutral, self.forward_signs)
                 if self.phase == 'pulse' and previous != (self.current_trial, self.phase):
-                    if np.linalg.norm(self.body_velocity()) > .08 or np.linalg.norm(xyz(self.latest['raw'].angular_velocity)) > .10:
-                        self.stop('not_at_rest_before_pulse')
-                        return
-                    from scipy.spatial.transform import Rotation
-                    q = self.latest['attitude'].orientation
-                    acceleration = np.array(xyz(self.latest['raw'].linear_acceleration))
-                    if self.settings['accelerometer_semantics'] == 'specific_force':
-                        acceleration += Rotation.from_quat([q.x,q.y,q.z,q.w]).inv().apply([0,0,-9.80665])
-                    if np.linalg.norm(acceleration) > .6:
-                        self.stop('gravity_semantics_or_baseline_motion_invalid')
+                    if not self.rest.ready(now):
+                        self.stop('rest_baseline_not_verified')
                         return
                 if previous != (self.current_trial, self.phase):
                     self.phase_started = now
-                    transition = dict(trial=self.current_trial, planned_pwm=self.planned)
+                    if self.phase == 'baseline':
+                        self.rest.reset()
+                    transition = dict(trial=self.current_trial, planned_pwm=self.planned,
+                        rest_verified=self.phase=='pulse' and self.rest.ready(now))
                 if self.phase == 'complete':
                     self.stop('complete', immediate=True)
                 elif self.motor:
@@ -462,6 +486,8 @@ class CalibrationNode(Node):
             data['gates'] = dict(software_enable=self.enabled, receiver_enable=self.rc_enabled,
                                  identity_verified=self.vehicle_verified, parameters_verified=self.parameters_valid,
                                  estimator_valid=self.estimator_valid, owns_output=self.owns_output)
+            data['rest_elapsed_s'] = max(0., now-self.rest.since) if self.rest.since is not None else 0.
+            data['rest_verified'] = self.rest.ready(now)
             times = [stamp(self.latest[k]) for k in ('raw', 'attitude', 'velocity') if k in self.latest]
             data['source_skew_s'] = max(times)-min(times) if len(times) == 3 else None
             self.diagnostics.publish(String(data=json.dumps(data, allow_nan=False)))

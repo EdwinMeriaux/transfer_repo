@@ -7,11 +7,11 @@ import pytest
 from scipy.spatial.transform import Rotation
 
 from blueboat_ppo_controller.calibration_analysis import (
-    AnalysisSettings, analyze, corrected_acceleration, estimate_trial, fit_lookup, isotonic, read_csv)
+    AnalysisSettings, analyze, corrected_acceleration, estimate_trial, fit_lookup, isotonic, read_csv, settings_from_session)
 from blueboat_ppo_controller.calibration_synthetic import generate
 from blueboat_ppo_controller.motor_adapter import MotorAdapter
 from blueboat_ppo_controller.motor_interface import MotorInterface
-from blueboat_ppo_controller.thrust_calibration import PulsePlan, StreamCheck
+from blueboat_ppo_controller.thrust_calibration import PulsePlan, RestCheck, StreamCheck
 from blueboat_ppo_controller.thrust_lookup import ThrustLookup
 
 
@@ -61,6 +61,20 @@ def test_source_and_receipt_clock_validation():
         StreamCheck().accept(102., 100., 1.)
 
 
+def test_rest_requires_a_continuous_fresh_quiet_interval():
+    rest=RestCheck(duration_s=1.,max_gap_s=.06)
+    rest.observe(0.,True)
+    assert not rest.ready(0.)
+    for now in np.arange(.01,1.02,.01):
+        rest.observe(float(now),True)
+    assert rest.ready(1.02)
+    assert not rest.ready(1.1)
+    rest.observe(1.11,True)
+    assert not rest.ready(1.11)
+    rest.observe(1.12,False)
+    assert rest.since is None
+
+
 def test_synthetic_estimation_separate_directions_and_motors(synthetic):
     _, _, _, trials = synthetic
     assert all(t['accepted'] for t in trials), [(t['trial'], t['reason']) for t in trials if not t['accepted']]
@@ -84,6 +98,17 @@ def test_configurable_mass_and_added_mass(synthetic):
     for mass in (0., -1., float('nan')):
         with pytest.raises(ValueError):
             AnalysisSettings(mass)
+
+
+def test_analysis_uses_the_measured_ros_mass_without_a_fixed_default():
+    metadata=dict(settings=dict(mass_kg=57.3,accelerometer_semantics='linear_acceleration'))
+    settings=settings_from_session(metadata)
+    assert settings.mass_kg==57.3 and settings.accelerometer_semantics=='linear_acceleration'
+    assert settings_from_session(metadata,mass_kg=60.).mass_kg==60.
+    with pytest.raises(ValueError,match='measured mass'):
+        settings_from_session()
+    with pytest.raises(ValueError):
+        settings_from_session(dict(settings=dict(mass_kg=0.)))
 
 
 @pytest.mark.parametrize('change,reason', [

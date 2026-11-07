@@ -11,7 +11,7 @@
   },
   "pytest": {
     "command": ".venv/bin/python -m pytest -q -ra",
-    "passed": 74,
+    "passed": 84,
     "skipped": 4,
     "skip_reasons": {
       "live_ArduPilot_SITL": "3 opt-in tests skipped; ROS 2, sim_vehicle.py and a running Docker daemon unavailable locally",
@@ -20,15 +20,20 @@
     "coverage": [
       "Existing policy integrity, reference observations/actions, inference timing and controller safety",
       "Finite signed left/right/symmetric pulse plans and bounds",
+      "Actual default constructor uses dry-run with no RC override publisher",
+      "Sustained fresh neutral/rest interval; one quiet sample and disturbed baselines cannot enable a pulse",
       "Source and monotonic receipt timestamps, rate/gap/skew/frame checks",
       "Synthetic known-force recovery using configurable mass and optional added mass",
+      "Analysis inherits the measured ROS session mass; no nominal boat-mass fallback",
       "Gravity and rigid IMU lever-arm correction",
       "Trial rejection for disturbances, invalid timing/frames/quaternion, velocity disagreement and bad actual outputs",
       "Separate monotonic branches, uncertainty, insufficient coverage, dead-zone and inverse rejection/clipping",
       "Draft lookup rejection and optional PPO MotorAdapter integration bound to evidence and identity",
       "Transport-mocked telemetry/dry-run with no actuator publisher",
       "Transport-mocked enable/mode/arm/output checks, takeover, latching, watchdog and disk failure",
-      "A stalled event log cannot hold the independent watchdog lock"
+      "A stalled event log cannot hold the independent watchdog lock",
+      "Transport-mocked production callbacks -> actual CSV -> mass-based estimation -> six fitted branches -> generated PPO draft -> reviewer-accepted temporary MotorAdapter inverse",
+      "Hardware calibration refuses missing completed SITL calibration acceptance"
     ]
   },
   "package": {
@@ -40,10 +45,11 @@
   },
   "installed_offline_demo": {
     "commands": [
-      ".venv/bin/calibration_synthetic artifacts/calibration-demo/synthetic.csv --mass-kg 42.5",
-      ".venv/bin/calibration_analyze artifacts/calibration-demo/synthetic.csv --mass-kg 42.5 --left-neutral 1500 --right-neutral 1500 --metadata artifacts/calibration-demo/synthetic.json --output artifacts/calibration-demo/report-final"
+      ".venv/bin/calibration_synthetic artifacts/calibration-audit/synthetic.csv --mass-kg 57.3",
+      ".venv/bin/calibration_analyze artifacts/calibration-audit/synthetic.csv --left-neutral 1500 --right-neutral 1500 --metadata artifacts/calibration-audit/synthetic.json --output artifacts/calibration-audit/report"
     ],
-    "synthetic_mass_kg": 42.5,
+    "synthetic_mass_kg": 57.3,
+    "analysis_mass_inherited_from_session": true,
     "accepted_trials": 36,
     "rejected_trials": 0,
     "branches": 6,
@@ -74,5 +80,15 @@
     "Yaw inertia/damping, lever-arm correction adequacy and propeller/ESC delay",
     "Repeatability, independent effective motor identifiability and applicability to PPO Newton commands"
   ],
+  "implementation_audit": {
+    "default_mode": "dry_run in node, YAML and launch; no motor publisher",
+    "excitation": "PulsePlan -> RestCheck -> CalibrationNode.publish_pwm -> existing rc_override helper",
+    "recording": "MAVROS raw callback and joined attitude/velocity/output -> Recorder CSV",
+    "mass_flow": "Measured ROS mass_kg -> session metadata -> settings_from_session -> effective-force estimates",
+    "estimation": "Initial COM acceleration minus neutral baseline; approximate F=m*a with optional supplied added mass",
+    "mapping": "fit_lookup -> lookup.json and ppo_calibration.draft.json -> guarded MotorAdapter.convert / ThrustLookup.inverse",
+    "acceptance": "Generated draft has verified and both effective-mapping acceptance flags false",
+    "policy_files_byte_equal_to_commit": "93219a7"
+  },
   "trained_model_observation_and_action_definitions_changed": false
 }

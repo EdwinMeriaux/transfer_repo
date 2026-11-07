@@ -16,7 +16,7 @@ class Pulse:
 
 class PulsePlan:
     """A finite sequence; faults never resume. Time is monotonic, not ROS time."""
-    def __init__(self, deltas=(-40, 40), sides=('left', 'right', 'symmetric'), repeats=3,
+    def __init__(self, deltas=(-40, -60, 40, 60), sides=('left', 'right', 'symmetric'), repeats=3,
                  baseline_s=2., pulse_s=.5, recovery_s=3., max_delta_pwm=60):
         if (not sides or any(s not in ('left', 'right', 'symmetric') for s in sides)
                 or not deltas or any(type(d) is not int or d == 0 or abs(d) > max_delta_pwm for d in deltas)
@@ -52,6 +52,30 @@ class PulsePlan:
         if any(not 1000 <= v <= 2000 for v in pwm):
             raise ValueError('Pulse crosses PWM limits')
         return index, phase, pwm, trial
+
+
+class RestCheck:
+    """A continuous, fresh quiet interval; one stationary sample cannot enable a pulse."""
+    def __init__(self, duration_s=1., max_gap_s=.06):
+        if not all(math.isfinite(v) and v > 0 for v in (duration_s, max_gap_s)):
+            raise ValueError('Invalid rest verification interval')
+        self.duration, self.max_gap = duration_s, max_gap_s
+        self.reset()
+
+    def reset(self):
+        self.since = self.last = None
+
+    def observe(self, now, stationary):
+        if not stationary or not math.isfinite(now):
+            self.reset()
+            return
+        if self.last is None or not 0 < now-self.last <= self.max_gap:
+            self.since = now
+        self.last = now
+
+    def ready(self, now):
+        return (self.since is not None and self.last is not None
+                and 0 <= now-self.last <= self.max_gap and now-self.since >= self.duration)
 
 
 class StreamCheck:

@@ -2,7 +2,7 @@
 
 Node/package: `blueboat_ppo_controller`. Executables: `ppo_node`, `inference_test`. The latter has no ROS imports. The node uses a single ROS executor plus an independent watchdog thread. ROS 2 Humble message serialization still requires a Linux/ROS execution test; transport-mocked tests do not replace that test.
 
-The separate `thrust_calibration` executable and offline `calibration_analyze` / `calibration_synthetic` tools are described in [THRUST_CALIBRATION.md](THRUST_CALIBRATION.md). Calibration adds `/mavros/imu/data_raw` and `/mavros/rc/out` subscriptions, configurable odometry/body/world velocity selection, `/blueboat/calibration/enable` heartbeat and JSON `/blueboat/calibration/status`. It creates an RC override publisher only in explicitly enabled powered mode with a verified motor interface. Its telemetry checks do not establish physical frame/mapping correctness automatically.
+The separate `thrust_calibration` executable and offline `calibration_analyze` / `calibration_synthetic` tools are described in [THRUST_CALIBRATION.md](THRUST_CALIBRATION.md). Calibration defaults to dry-run, adds `/mavros/imu/data_raw` and `/mavros/rc/out` subscriptions, configurable odometry/body/world velocity selection, `/blueboat/calibration/enable` heartbeat and JSON `/blueboat/calibration/status`. It creates an RC override publisher only in explicitly enabled powered mode with a verified motor interface and requires a sustained rest baseline before excitation. Its telemetry checks do not establish physical frame/mapping correctness automatically.
 
 ## Default subscriptions
 

@@ -1,5 +1,6 @@
 """Executor/transport mocks, explicitly NOT a ROS or ArduPilot SITL test."""
 import copy
+import hashlib
 import importlib
 import json
 import sys
@@ -7,6 +8,7 @@ import time
 from collections import deque
 from types import ModuleType, SimpleNamespace as S
 
+import numpy as np
 import pytest
 
 
@@ -94,8 +96,11 @@ def calibration_node(monkeypatch, tmp_path, calibration):
     sys.modules.pop('blueboat_ppo_controller.calibration_node',None)
     module = importlib.import_module('blueboat_ppo_controller.calibration_node')
 
-    def factory(mode='telemetry', **overrides):
-        settings.update(mode=mode,enable_powered=mode=='powered')
+    def factory(mode=None, **overrides):
+        settings.pop('mode', None)
+        settings['enable_powered'] = mode=='powered'
+        if mode is not None:
+            settings['mode'] = mode
         settings.update(overrides)
         node = module.CalibrationNode()
         nodes.append(node)
@@ -125,14 +130,15 @@ def calibration_node(monkeypatch, tmp_path, calibration):
     sys.modules.pop('blueboat_ppo_controller.calibration_node',None)
 
 
-@pytest.mark.parametrize('mode',['telemetry','dry_run'])
+@pytest.mark.parametrize('mode',[None,'telemetry','dry_run'])
 def test_default_and_dry_run_never_create_output(calibration_node, mode):
     node = calibration_node(mode)
     node.report()
     node.control()
     assert '/mavros/rc/override' not in node.publishers
     assert node.fault is None
-    assert node.phase == ('baseline' if mode=='dry_run' else 'telemetry')
+    assert node.settings['mode']==('dry_run' if mode is None else mode)
+    assert node.phase == ('telemetry' if mode=='telemetry' else 'baseline')
     assert node.command is None
     assert node.diagnostics.messages
 
@@ -165,6 +171,7 @@ def test_neutral_first_pulse_release_and_latch(calibration_node):
     node = calibration_node('powered')
     node.control()
     assert node.owns_output and node.command == [1500,1510]
+    node.rest.since, node.rest.last = time.monotonic()-1.1, time.monotonic()
     node.plan.started = time.monotonic()-2.01
     node.control()
     assert node.command == [1460,1510]
@@ -188,6 +195,7 @@ def test_actual_neutral_feedback_prevents_start(calibration_node):
 def test_actual_pulse_response_and_idle_outputs_are_checked(calibration_node):
     node=calibration_node('powered')
     node.control()
+    node.rest.since, node.rest.last = time.monotonic()-1.1, time.monotonic()
     node.plan.started=time.monotonic()-2.01
     node.control()
     node.phase_started-=.16
@@ -256,6 +264,7 @@ def test_competing_publisher_and_parameter_mismatch(calibration_node,monkeypatch
 def test_slow_event_log_cannot_block_the_independent_watchdog(calibration_node,monkeypatch):
     node=calibration_node('powered')
     node.control()
+    node.rest.since, node.rest.last = time.monotonic()-1.1, time.monotonic()
     node.plan.started=time.monotonic()-2.01
     monkeypatch.setattr(node,'event',lambda *args,**kwargs:time.sleep(.16))
     node.control()
@@ -270,3 +279,142 @@ def test_unavailable_raw_orientation_is_expected(calibration_node):
     raw.header.stamp.nanosec+=1000000
     node.raw_callback(raw)
     assert node.streams['raw'].last_error is None
+
+
+def test_a_single_quiet_sample_cannot_start_a_pulse(calibration_node):
+    node=calibration_node('powered')
+    node.control()
+    node.observe_rest(node.latest['raw'])
+    node.plan.started=time.monotonic()-node.plan.baseline_s-.01
+    node.control()
+    assert node.fault=='rest_baseline_not_verified'
+    assert all(p.channels[0] in (0,1500) and p.channels[2] in (0,1510) for p in node.output.messages)
+
+
+@pytest.mark.parametrize('disturbance',['speed','angular_rate','acceleration','missing_attitude'])
+def test_a_disturbed_baseline_resets_the_rest_interval(calibration_node,disturbance):
+    node=calibration_node('powered')
+    node.control()
+    node.rest.since, node.rest.last = time.monotonic()-1.1, time.monotonic()
+    assert node.rest.ready(time.monotonic())
+    if disturbance=='speed':
+        node.latest['velocity'].twist.twist.linear=S(x=.15,y=0.,z=0.)
+    elif disturbance=='angular_rate':
+        node.latest['raw'].angular_velocity=S(x=0.,y=0.,z=.2)
+    elif disturbance=='acceleration':
+        node.latest['raw'].linear_acceleration.x=.8
+    else:
+        node.latest.pop('attitude')
+    node.observe_rest(node.latest['raw'])
+    assert not node.rest.ready(time.monotonic())
+
+
+def test_hardware_refuses_without_completed_calibration_sitl_acceptance(calibration_node):
+    from pathlib import Path
+    node=calibration_node('telemetry')
+    profile_path=Path(node.settings['interface_file'])
+    profile=json.loads(profile_path.read_text())
+    profile.update(target='hardware',uid=1234,sitl_test_passed=True,restrained_motor_test_passed=True,
+                   sitl_calibration_test_passed=False)
+    profile_path.write_text(json.dumps(profile))
+    with pytest.raises(ValueError,match='sitl_calibration_test_passed'):
+        calibration_node('powered',deployment_target='hardware')
+
+
+def test_callbacks_csv_estimator_and_ppo_inverse_end_to_end(calibration_node,monkeypatch,tmp_path):
+    """Synthetic dynamics through production callbacks, never a live ROS/SITL test."""
+    from blueboat_ppo_controller.calibration_analysis import analyze,settings_from_session
+    from blueboat_ppo_controller.motor_adapter import MotorAdapter
+    from blueboat_ppo_controller.policy_runtime import thrust_action
+    measured_mass=57.3
+    node=calibration_node('powered',mass_kg=measured_mass,baseline_s=1.2,recovery_s=1.2)
+    # Drive a deterministic source/receipt clock; watchdog behavior has separate wall-clock tests.
+    node.finished.set()
+    node.watchdog.join(timeout=1.)
+    clock=S(mono=1000.,ros=1800000000.)
+    module=sys.modules['blueboat_ppo_controller.calibration_node']
+    monkeypatch.setattr(module,'time',S(monotonic=lambda:clock.mono))
+    monkeypatch.setattr(node,'ros_now',lambda:clock.ros)
+    for stream in node.streams.values():
+        stream.last_stamp=None
+        stream.receipts.clear()
+        stream.last_error='no_samples'
+    node.latest.clear()
+    velocity=0.
+    rng=np.random.default_rng(19)
+    dt=.01
+    try:
+        for step in range(int((len(node.plan.trials)*node.plan.period+5)/dt)):
+            elapsed=step*dt
+            clock.mono,clock.ros=1000.+elapsed,1800000000.+elapsed+.001
+            tick_ns=1800000000*10**9+step*10**7
+            header=S(frame_id='base_link',stamp=S(sec=tick_ns//10**9,nanosec=tick_ns%10**9))
+            command=node.command if node.command is not None else node.neutral
+            offsets=np.array(command)-node.neutral
+            force=float(np.sum(np.sign(offsets)*.002*offsets**2))
+            acceleration=force/measured_mass-.05*velocity
+            if node.phase=='recovery':
+                acceleration-=5*velocity
+            node.attitude_callback(S(header=header,orientation=S(x=0.,y=0.,z=0.,w=1.),orientation_covariance=[0.]*9))
+            node.velocity_callback(S(header=S(frame_id='map',stamp=header.stamp),child_frame_id='base_link',
+                                     twist=S(twist=S(linear=S(x=velocity,y=0.,z=0.)))))
+            node.output_callback(S(header=header,channels=[command[0],0,command[1]]+[0]*5))
+            if step%10==0:
+                node.state_callback(S(connected=True,armed=True,mode='MANUAL',system_status=4))
+                node.enable_callback(S(data=True))
+                channels=[1500]*8
+                channels[node.motor.enable_channel-1]=2000
+                node.rc_callback(S(channels=channels))
+                node.estimator_callback(S(attitude_status_flag=True,velocity_horiz_status_flag=True,
+                    velocity_vert_status_flag=True,const_pos_mode_status_flag=False,gps_glitch_status_flag=False,accel_error_status_flag=False))
+                # Identity/FC parameter query verification is supplied by the transport fixture.
+                node.receipts['parameters']=clock.mono
+            a=np.array([acceleration+.025,-.012,9.80665+.018])+rng.normal(0.,.002,3)
+            node.raw_callback(S(header=header,linear_acceleration=S(x=float(a[0]),y=float(a[1]),z=float(a[2])),
+                angular_velocity=S(x=0.,y=0.,z=0.),linear_acceleration_covariance=[0.]*9,angular_velocity_covariance=[0.]*9))
+            if step%50==0:
+                node.report()
+            if step%2==0:
+                node.control()
+            velocity+=acceleration*dt
+            assert node.fault in (None,'complete'), node.fault
+            if node.fault=='complete':
+                break
+        assert node.fault=='complete'
+    finally:
+        node.close()
+    from pathlib import Path
+    metadata=json.loads(node.run_path.with_suffix('.json').read_text())
+    settings=settings_from_session(metadata)
+    assert settings.mass_kg==measured_mass
+    report=tmp_path/'callback-analysis'
+    trials,lookup=analyze(node.run_path.with_suffix('.csv'),report,settings,
+        dict(zip(('left','right'),node.neutral)),metadata)
+    assert len(trials)==36 and all(t['accepted'] for t in trials), [(t['trial'],t['reason']) for t in trials if not t['accepted']]
+    assert len(lookup['curves'])==6 and lookup['paired_validation']['passed']
+    for key,curve in lookup['curves'].items():
+        factor=2 if key.startswith('symmetric') else 1
+        np.testing.assert_allclose(curve['force_magnitude_N'],factor*np.array([3.2,7.2]),rtol=.04)
+    candidate_path=report/'ppo_calibration.draft.json'
+    candidate=json.loads(candidate_path.read_text())
+    assert candidate['verified'] is False and candidate['effective_mapping_accepted'] is False
+    assert candidate['independent_effective_mapping_verified'] is False
+    with pytest.raises(ValueError,match='verified motor interface'):
+        MotorAdapter(candidate_path,'sitl')
+    # Emulate reviewer acceptance ONLY for this temporary synthetic unit-test artifact.
+    lookup['verified']=lookup['independent_mapping_reviewed']=True
+    lookup_path=report/'lookup.json'
+    lookup_path.write_text(json.dumps(lookup))
+    candidate.update(verified=True,effective_mapping_accepted=True,independent_effective_mapping_verified=True,
+                     maximum_abs_force_N=6.,effective_lookup_sha256=hashlib.sha256(lookup_path.read_bytes()).hexdigest())
+    candidate_path.write_text(json.dumps(candidate))
+    motor=MotorAdapter(candidate_path,'sitl')
+    requested=thrust_action([.2,-1./3.])
+    before=requested.copy()
+    pwm,applied=motor.convert(requested)
+    np.testing.assert_allclose(requested,[5.,-5.])
+    np.testing.assert_array_equal(requested,before)
+    np.testing.assert_array_equal(applied,requested)
+    assert 1540<=pwm[0]<=1560 and 1450<=pwm[1]<=1470
+    with pytest.raises(ValueError,match='measured region'):
+        motor.convert([.1,0.])

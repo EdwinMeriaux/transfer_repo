@@ -1,8 +1,8 @@
 # Alberto: IMU-based effective thrust calibration
 
-This module measures the **initial effective surge response** to bounded RC-input PWM pulses. It does not measure static propeller thrust. Total wet boat mass, including battery and payload, is supplied by the operator. The shipped mass is `0.0`: telemetry is allowed, powered operation is refused.
+This module measures the **initial effective surge response** to bounded RC-input PWM pulses. It does not measure static propeller thrust. Total wet boat mass, including battery and payload, is supplied as the ROS `mass_kg` parameter. The node, YAML and launch file default to **dry-run** with no motor publisher. The shipped mass is `0.0`: dry-run/telemetry are allowed, powered operation is refused.
 
-Local status: **74 tests passed, 4 skipped** on macOS; see [the validation record](validation/thrust_calibration_tests.json). ROS 2 Humble serialization and the three live ArduPilot SITL tests require Alberto's Linux installation. **No SITL or physical-boat calibration has been completed by this change.** Both templates remain unverified. The model, observation adapter, action scaling and training environment are unchanged.
+Local status: **84 tests passed, 4 skipped** on macOS; see [the validation record](validation/thrust_calibration_tests.json). ROS 2 Humble serialization and the three live ArduPilot SITL tests require Alberto's Linux installation. **No SITL or physical-boat calibration has been completed by this change.** Both templates remain unverified. The model, observation adapter, action scaling and training environment are unchanged.
 
 ## Files and the PPO pipeline
 
@@ -11,14 +11,16 @@ All deployment code is inside the existing `ros2_ws/src/blueboat_ppo_controller/
 | File in `blueboat_ppo_controller/` | Role |
 |---|---|
 | `calibration_node.py` | ROS telemetry, source-time/rate/frame checks, operator gates, finite PWM procedure, watchdog and CSV/events. Separate executable; does not run PPO. |
-| `thrust_calibration.py` | ROS-independent pulse scheduler, clock/rate checks and CSV schema. |
-| `calibration_analysis.py` | Offline gravity/bias/lever-arm correction, rejection, effective-force estimates, monotonic fits, uncertainty and plots. |
+| `thrust_calibration.py` | ROS-independent pulse scheduler, sustained-rest gate, clock/rate checks and CSV schema. |
+| `calibration_analysis.py` | Offline gravity/bias/lever-arm correction, rejection, effective-force estimates, monotonic fits, uncertainty, plots and a PPO calibration draft. |
 | `calibration_synthetic.py` | Reproducible fake data; never actuation evidence. |
 | `thrust_lookup.py` | Inverse effective Newtons → input PWM, bounded to measured regions. |
 | `motor_interface.py` | Existing identity/mapping/failsafe checks extracted from `MotorAdapter`, without requiring a force curve. Shared by calibration and PPO. |
 | `motor_adapter.py` | PPO integration point. Existing force curves still work; optional reviewed effective lookup is guarded by additional checks. |
 
 PPO remains `policy_runtime.py → requested left/right N → MotorAdapter.convert() → existing rc_override() → MAVROS/ArduRover MANUAL two-paddle inputs`. No new subscriber changes PPO's observations or actions. The calibration node and PPO actuator node must never control the vehicle simultaneously. The calibrator refuses another publisher on its RC override topic; also inspect the FC/GCS for other MAVLink control sources, which ROS discovery cannot see.
+
+Implementation audit: `test_callbacks_csv_estimator_and_ppo_inverse_end_to_end` in `tests/test_calibration_transport_mock.py` exercises production IMU/attitude/velocity/output callbacks, sustained rest, all 36 default excitation trials, the actual CSV writer, mass inherited from the session, effective-force fitting, generated PPO draft rejection and a reviewer-accepted temporary inverse mapping. It checks known synthetic forces and unchanged Newton-valued requests. This is transport-mocked evidence, not a ROS/SITL or physical test. Separate tests exercise the real default constructor without overriding its mode, baseline disturbances, hardware refusal without completed SITL acceptance, watchdogs and inverse bounds.
 
 ## Install and run the offline checks first
 
@@ -88,7 +90,7 @@ ros2 topic echo /blueboat/calibration/status
 ros2 node info /blueboat_thrust_calibration
 ```
 
-Telemetry and dry-run modes create **no RC override publisher**. Status contains the discovered publisher names/types/QoS, rolling receipt rates and largest gaps, source timestamps, source skew, frame IDs and CSV path. Rates are measured over a rolling two-second window; powered preflight needs at least one second of motion samples. Defaults require raw ≥40 Hz, attitude ≥20 Hz, velocity ≥10 Hz, output ≥5 Hz; source age ≤0.2 s, cross-stream skew ≤0.05 s, largest motion receipt gap ≤0.15 s. These are necessary gates, not a promise that low-rate telemetry passes: aim for **50 Hz or more on all motion streams** to satisfy skew and cover the short initial window. Offline analysis also rejects raw source gaps >0.06 s. Do not relax gates to mask missing data.
+Telemetry and dry-run modes create **no RC override publisher**. Status contains the discovered publisher names/types/QoS, rolling receipt rates and largest gaps, source timestamps, source skew, frame IDs, rest verification and CSV path. Rates are measured over a rolling two-second window; powered preflight needs at least one second of motion samples. Defaults require raw ≥40 Hz, attitude ≥20 Hz, velocity ≥10 Hz, output ≥5 Hz; source age ≤0.2 s, cross-stream skew ≤0.05 s, largest motion receipt gap ≤0.15 s. These are necessary gates, not a promise that low-rate telemetry passes: aim for **50 Hz or more on all motion streams** to satisfy skew and cover the short initial window. Offline analysis also rejects raw source gaps >0.06 s. Do not relax gates to mask missing data.
 
 Verify with known motions and rest measurements:
 
@@ -143,7 +145,9 @@ ros2 launch blueboat_ppo_controller calibration.launch.py \
   config:=$HOME/gazebo_blue_boat/artifacts/calibration/run.yaml mode:=dry_run
 ```
 
-Status/events show the left/right/symmetric planned values. Actual-command CSV fields stay empty, and analysis rejects dry-run trials. The default plan uses ±40 PWM counts, three repeats, 2 s neutral baseline, 0.5 s pulse and 3 s recovery. `delta_pwm` is signed propulsion direction: each side's independently measured input forward sign converts it to an RC PWM offset. This supports reversed wiring without conflating forward and reverse. Bounds are configurable, with a hard ±250-count maximum and ≤1 s pulses; the default maximum is ±60 counts. **PWM limits are not Newton limits.** A first pulse may be inside the ESC deadband and produce no resolved estimate.
+Status/events show the left/right/symmetric planned values. Actual-command CSV fields stay empty, and analysis rejects dry-run trials. The default plan uses `[-40, -60, 40, 60]` PWM offsets, three repeats, a 2 s neutral baseline, a 0.5 s pulse and 3 s recovery. This supplies two magnitudes in each direction for fitting if the responses are resolved. For initial interface checks, reduce the plan to `[-40, 40]`; one level per direction is insufficient for a lookup. `delta_pwm` is signed propulsion direction: each side's independently measured input forward sign converts it to an RC PWM offset. Bounds are configurable, with a hard ±250-count maximum and ≤1 s pulses; the default maximum is ±60 counts. **PWM limits are not Newton limits.** A pulse may be inside the ESC deadband and produce no resolved estimate.
+
+Before every pulse, fresh neutral-baseline samples must verify continuous rest for `rest_duration_s` (default 1 s): body speed ≤0.08 m/s, angular-rate norm ≤0.10 rad/s and gravity-corrected acceleration norm ≤0.6 m/s². Raw sample gaps larger than `rest_max_gap_s` (default 0.06 s), disturbances or missing synchronized attitude/velocity reset that interval. Powered samples also require commanded neutral and, by default, measured neutral output. A single quiet measurement cannot enable a pulse. If the interval is incomplete when the scheduled pulse begins, the procedure aborts and releases; it does not silently run a shortened baseline. Events record rest verification at each pulse transition.
 
 The live pytest suite must use a dedicated, isolated **SITL-only ROS domain/network**, with no physical FC connected. Stop the calibrator and PPO actuator nodes. Start the established SITL stack; using your normal operator workflow, select MANUAL, arm SITL, keep simulated receiver motor inputs neutral, and enable its separate simulated override switch. The tests do not perform those actions. Set actual SITL mass and the verified SITL profile:
 
@@ -172,7 +176,7 @@ ros2 launch blueboat_ppo_controller calibration.launch.py \
   interface_file:=$HOME/gazebo_blue_boat/artifacts/calibration/sitl-interface.json
 ```
 
-Launch defaults override copied YAML to telemetry/disabled/SITL unless explicitly supplied. The operator must select MANUAL, arm externally, and enable the separate receiver switch. Only after preflight and with the operator ready:
+Launch defaults override copied YAML to dry-run/disabled/SITL unless explicitly supplied. The operator must select MANUAL, arm externally, and enable the separate receiver switch. Only after preflight and with the operator ready:
 
 ```bash
 ros2 topic pub --rate 10 /blueboat/calibration/enable std_msgs/msg/Bool '{data: true}'
@@ -188,15 +192,17 @@ For the physical boat, repeat with its separately verified hardware profile and 
 
 ## Estimate, fit and inspect uncertainty
 
-Stop collection and copy `config/analysis.template.json` into the run directory. Set measured `imu_offset_flu_m` (COM → IMU, body FLU), uncertainty of total mass, and confirmed acceleration semantics. Default `specific_force` adds body-projected gravity; `linear_acceleration` is only for a verified upstream gravity-removed signal. Match the node's semantics. Run with the CSV/sidecar and measured input neutrals:
+Stop collection and copy `config/analysis.template.json` into the run directory. Set measured `imu_offset_flu_m` (COM → IMU, body FLU), uncertainty of total mass, and confirmed acceleration semantics. Default `specific_force` adds body-projected gravity; `linear_acceleration` is only for a verified upstream gravity-removed signal. Analysis inherits mass and acceleration semantics from the session sidecar; the analysis JSON may override semantics. Run with the CSV/sidecar and measured input neutrals:
 
 ```bash
 calibration_analyze /absolute/path/calibration-RUN.csv \
   --metadata /absolute/path/calibration-RUN.json \
-  --mass-kg ACTUAL_TOTAL_MASS_KG --left-neutral ACTUAL_LEFT_NEUTRAL \
+  --left-neutral ACTUAL_LEFT_NEUTRAL \
   --right-neutral ACTUAL_RIGHT_NEUTRAL \
   --settings /absolute/path/analysis.json --output /absolute/path/new-report
 ```
+
+`mass_kg` is taken directly from the recorded ROS parameter. Without a sidecar, supply `--mass-kg ACTUAL_TOTAL_MASS_KG`; there is no fixed boat-mass fallback. An explicit `--mass-kg` overrides a recorded value, and lookup `mass_provenance` retains both values and identifies a mismatch for review. A missing, nonpositive or nonfinite mass is rejected.
 
 The initial default window is 0.08–0.30 s after the later of command onset and first FC-output response. Check the real actuator/propeller delay and change the window deliberately; FC PWM response is not propeller spin-up measurement. Incomplete or insufficiently sampled windows are rejected. The estimator subtracts median neutral acceleration after gravity and rigid lever-arm correction:
 
@@ -211,13 +217,13 @@ The gyro derivative supplies angular acceleration; derivative noise and mounting
 
 Per direction and side, repeated accepted trials are combined and fitted with weighted isotonic regression. Forward and reverse are separate; no polynomial extrapolation is used. Lookup records retain repeat count, raw means, fitted values, one-sigma trial scatter and supplied mass uncertainty. Scatter is **not divided by sample count**: adjacent IMU samples are correlated. Uncertainty does not include unknown attitude, drag, added-mass, placement, current, battery or propeller model bias. Isotonic plateaus are unresolved for inversion; missing directions, insufficient repeats, large PWM gaps, neutral-to-first-force gaps and forces above the largest measured value remain unmeasured. Plots compare commanded/FC-output PWM, raw and corrected initial acceleration, effective force, fitted curves and uncertainty bars.
 
-Optional `added_mass_kg` and its uncertainty use `(mass_kg + added_mass_kg) * delta_a`. This is an explicitly supplied model correction; IMU surge data alone cannot identify thrust and added mass separately. Low GPS speed also does not establish low water-relative speed in a current. Drag, wind and waves may survive baseline subtraction. Bias cancellation is local, not a full accelerometer calibration.
+**`F = ma` is approximate for a boat.** A simple surge balance includes `(mass + added_mass) * acceleration`, water-relative drag and other loads. The default `mass_kg * delta_a` is therefore an effective response estimate, not true static propeller thrust. Optional `added_mass_kg` and its uncertainty use `(mass_kg + added_mass_kg) * delta_a`; this is an explicitly supplied model correction. IMU surge data alone cannot identify thrust and added mass separately. Low GPS speed also does not establish low water-relative speed in a current. Drag, wind and waves may survive baseline subtraction. Bias cancellation is local, not a full accelerometer calibration.
 
 Single-motor trials report an **isolated effective surge contribution** only under valid isolation, negligible background/rotation and consistent inertial response. A twin-thruster boat usually yaws during them; if yaw cannot be kept small the trials should be rejected and independent motor forces remain unidentifiable. Yaw-rate data alone does not supply yaw inertia, added yaw inertia, moment arms, or hydrodynamic damping. Symmetric trials measure total boat force response and are never automatically divided by two. A paired-additivity report compares repeated symmetric responses with the sum of isolated responses; this is necessary but insufficient for independent PPO force mapping. Review unequal and opposite-sign pairs and transient cross-effects too. Use additional instrumentation or a suitable load-cell experiment when those assumptions cannot be supported.
 
 ## Using the inverse mapping in PPO
 
-Analysis emits a **draft**, never an automatically enabled controller calibration. Preview its inverse offline with explicit acknowledgement of unreviewed assumptions:
+Analysis emits a **draft**, never an automatically enabled controller calibration. With a recorded motor-interface profile it also constructs `ppo_calibration.draft.json`, referencing the actual CSV and lookup with their checksums and the measured motor mapping. Its global `verified`, `effective_mapping_accepted` and `independent_effective_mapping_verified` flags are false. The motor adapter refuses it until review; this is the actual PPO input format, not an example copied by hand. Synthetic demonstrations without a motor-interface profile produce only the lookup. Preview the inverse offline with explicit acknowledgement of unreviewed assumptions:
 
 ```python
 from blueboat_ppo_controller.thrust_lookup import ThrustLookup
@@ -227,7 +233,7 @@ pwm, applied_effective_N = lookup.inverse(5.0, 'left', allow_unreviewed=True)
 
 This example only works if 5 N is inside a resolved measured branch. Normal calls require `independent_mapping_reviewed: true`. The `out_of_range` default is `reject`, including gaps below the first measured force and absent directions. Explicit `out_of_range='clip'` clips a large force to the measured maximum and a force below the first measured point to neutral, returning the applied effective force. Commands inside the explicit `zero_force_band_N` map to measured neutral. Nonfinite commands and internal unmeasured PWM intervals are rejected. PWM is rounded and bounded to 1000–2000; lookup knots must also match the vehicle's narrower verified RC limits.
 
-To use a reviewed effective lookup, preserve the CSV and all mapping evidence, and prepare a separate PPO actuator calibration JSON based on the existing vehicle profile. Keep every identity/parameter/takeover/failsafe/paired/hardware gate. Set:
+To use a reviewed effective lookup, preserve the CSV and original mapping evidence, and review the generated `ppo_calibration.draft.json`. Its 3 N request cap is an unverified starting limit and may lie outside resolved coverage; review the cap and measured domains together. Keep every identity/parameter/takeover/failsafe/paired/hardware gate. The generated paths are relative to the report directory; keep that structure intact or update paths and hashes when archiving. Review these fields:
 
 | Field | Required evidence/value |
 |---|---|
@@ -237,7 +243,7 @@ To use a reviewed effective lookup, preserve the CSV and all mapping evidence, a
 | `independent_effective_mapping_verified` | Reviewed isolation/geometry/paired/transient evidence supporting two motor mappings. |
 | `maximum_abs_force_N` | Deliberate deployment cap, ≤25 N; does not waive measured-region checks. |
 
-Only a reviewer with supporting evidence may set the acceptance flags, `verified: true` and `independent_mapping_reviewed: true` in the lookup. Its automatic `paired_validation.passed` must also be true (two matched magnitudes in each direction). Session metadata must identify a powered run of the same target, exact firmware/vehicle, motor mapping, expected parameters and neutrals. A missing/stale/synthetic/mismatched fit is refused. The normal PPO `calibration_file` parameter selects this JSON; no model changes are needed. The legacy `force_pwm_points` path remains supported with its original full −15..25 N coverage requirement.
+Only a reviewer with supporting evidence may set acceptance flags and `verified: true` in the PPO JSON, and `verified: true` / `independent_mapping_reviewed: true` in the lookup. Recompute `effective_lookup_sha256` after any reviewed lookup edit. Its automatic `paired_validation.passed` must also be true (two matched magnitudes in each direction). Session metadata must identify a powered run of the same target, exact firmware/vehicle, motor mapping, expected parameters and neutrals. A missing/stale/synthetic/mismatched fit is refused. The normal PPO `calibration_file` parameter selects this JSON; no model changes are needed. The legacy `force_pwm_points` path remains supported with its original full −15..25 N coverage requirement.
 
 PPO still clips requests to its original force envelope and deployment cap, then uses **strict rejection** for measured-region violations. A sparse low-pulse calibration will often be insufficient for PPO requests, especially near neutral. Remain in shadow until the required domain and effective-force interpretation are supported. Selecting a lookup does not prove that an MJX-trained Newton command is physically reproduced.
 

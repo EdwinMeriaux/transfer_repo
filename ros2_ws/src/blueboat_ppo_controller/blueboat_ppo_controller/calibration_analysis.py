@@ -1,8 +1,10 @@
 """Initial low-speed inertial response estimation, never static propeller thrust."""
 import argparse
+import copy
 import csv
 import hashlib
 import json
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -53,6 +55,18 @@ class AnalysisSettings:
                 or not 0 < self.output_response_threshold_pwm <= 50
                 or any(v <= 0 for k, v in asdict(self).items() if k.startswith(('max_', 'min_')))):
             raise ValueError('Invalid analysis settings / mass / IMU semantics')
+
+
+def settings_from_session(metadata=None, mass_kg=None, options=None):
+    """Carry the ROS mass parameter into analysis unless explicitly overridden."""
+    session = (metadata or {}).get('settings', {})
+    mass = mass_kg if mass_kg is not None else session.get('mass_kg')
+    if mass is None:
+        raise ValueError('Supply measured mass_kg in the session metadata or --mass-kg')
+    settings = dict(accelerometer_semantics=session.get('accelerometer_semantics', 'specific_force'))
+    settings.update(options or {})
+    settings['mass_kg'] = float(mass)
+    return AnalysisSettings(**settings)
 
 
 def read_csv(path):
@@ -363,10 +377,25 @@ def analyze(path, directory, settings, neutral_pwm, metadata=None, make_plots=Tr
     lookup = fit_lookup(trials, settings, neutral_pwm)
     lookup['evidence_sha256'] = hashlib.sha256(Path(path).read_bytes()).hexdigest()
     lookup['metadata'] = metadata or {}
+    session_mass = lookup['metadata'].get('settings', {}).get('mass_kg')
+    lookup['mass_provenance'] = dict(used_mass_kg=settings.mass_kg, session_mass_kg=session_mass,
+        differs_from_session=session_mass is not None and not np.isclose(settings.mass_kg, session_mass))
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=False)
     (directory/'trials.json').write_text(json.dumps(trials, indent=2, allow_nan=False)+'\n')
-    (directory/'lookup.json').write_text(json.dumps(lookup, indent=2, allow_nan=False)+'\n')
+    lookup_path = directory/'lookup.json'
+    lookup_path.write_text(json.dumps(lookup, indent=2, allow_nan=False)+'\n')
+    profile = lookup['metadata'].get('motor_interface')
+    if profile:
+        # Construct the actual PPO input artifact, but leave every acceptance gate closed.
+        candidate = copy.deepcopy(profile)
+        candidate.update(verified=False, effective_mapping_accepted=False, independent_effective_mapping_verified=False,
+            evidence_file=os.path.relpath(Path(path).resolve(), directory.resolve()), evidence_sha256=lookup['evidence_sha256'],
+            effective_lookup_file='lookup.json', effective_lookup_sha256=hashlib.sha256(lookup_path.read_bytes()).hexdigest(),
+            maximum_abs_force_N=3.)
+        for side in ('left','right'):
+            candidate[side].pop('force_pwm_points', None)
+        (directory/'ppo_calibration.draft.json').write_text(json.dumps(candidate, indent=2, allow_nan=False)+'\n')
     if make_plots:
         plot_results(rows, trials, lookup, directory, settings)
     return trials, lookup
@@ -376,19 +405,24 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('csv', type=Path)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--mass-kg', type=float, required=True)
-    parser.add_argument('--settings', type=Path, help='JSON overrides for AnalysisSettings; mass is always explicit')
+    parser.add_argument('--mass-kg', type=float, help='Measured total mass; otherwise use the recorded ROS mass_kg parameter')
+    parser.add_argument('--settings', type=Path, help='JSON analysis options; mass comes from the session or --mass-kg')
     parser.add_argument('--metadata', type=Path, help='Session JSON recorded by the calibration node')
     parser.add_argument('--left-neutral', type=int, required=True)
     parser.add_argument('--right-neutral', type=int, required=True)
     args = parser.parse_args()
     options = json.loads(args.settings.read_text()) if args.settings else {}
-    options['mass_kg'] = args.mass_kg
-    trials, lookup = analyze(args.csv, args.output, AnalysisSettings(**options),
-                            dict(left=args.left_neutral, right=args.right_neutral),
-                            json.loads(args.metadata.read_text()) if args.metadata else None)
+    metadata = json.loads(args.metadata.read_text()) if args.metadata else None
+    try:
+        settings = settings_from_session(metadata, args.mass_kg, options)
+    except (ValueError, TypeError) as error:
+        parser.error(str(error))
+    trials, lookup = analyze(args.csv, args.output, settings,
+                            dict(left=args.left_neutral, right=args.right_neutral), metadata)
     print(json.dumps(dict(accepted=sum(t['accepted'] for t in trials), rejected=sum(not t['accepted'] for t in trials),
                           fitted=list(lookup['curves']), missing_or_unresolved_branches=lookup['unmeasured'],
                           measured_force_magnitude_ranges_N={k:v['measured_force_domain_N'] for k,v in lookup['curves'].items()},
+                          mass_provenance=lookup['mass_provenance'],
+                          ppo_draft=str(args.output/'ppo_calibration.draft.json') if metadata and metadata.get('motor_interface') else None,
                           extrapolation='rejected; neutral gaps and flagged PWM intervals also rejected',
                           independent_mapping_reviewed=False), indent=2))
