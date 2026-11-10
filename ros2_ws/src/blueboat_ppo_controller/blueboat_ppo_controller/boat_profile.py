@@ -142,9 +142,15 @@ def report(directory):
     channel = profile.get('enable_rc_channel')
     if authority == 'rc_receiver' and (type(channel) is not int or expected.get(f'RC{channel}_OPTION') != 46):
         issues.append('No verified separate RC override-enable switch (RCn_OPTION=46); channel must be chosen and tested on the vehicle.')
-    for key in ('compid', 'flight_sw_version', 'uid'):
+    for key in ('compid', 'flight_sw_version'):
         if type(profile.get(key)) is not int or profile[key] <= 0:
             issues.append('Missing live hardware identity: ' + key + '; run capture after connecting MAVROS.')
+    uid = profile.get('uid')
+    warnings = []
+    if type(uid) is not int or uid < 0:
+        issues.append('Missing live hardware identity: uid; run capture after connecting MAVROS.')
+    elif uid == 0:
+        warnings.append('Flight controller reports no hardware UID; identity is pinned to system/component, exact firmware and live parameter checks.')
     for side in ('left','right'):
         motor = profile[side]
         if motor.get('servo_neutral_pwm') is None or motor.get('servo_forward_pwm_sign') not in (-1,1):
@@ -157,7 +163,7 @@ def report(directory):
     except (ValueError, KeyError, TypeError, OSError) as error:
         issues.append('MotorInterface preflight: ' + str(error))
     return dict(vehicle=profile['vehicle_id'], control_authority=authority, mass_kg=boat['mass_kg'], mass_source=boat['mass_source'],
-                mapping={s:profile[s] for s in ('left','right')}, powered_ready=not issues,
+                mapping={s:profile[s] for s in ('left','right')}, powered_ready=not issues, warnings=warnings,
                 blockers=issues, note='Static checks only; live telemetry, operator enable, mode, arm and output checks still apply. No FC settings were written.')
 
 

@@ -142,6 +142,8 @@ cd ~/gazebo_blue_boat
 
 `status` intentionally exits with code 2 while powered-operation evidence is missing. This is a blocker report, not a crash.
 
+Alberto's flight controller reports `uid=0`, and this MAVROS release has no `uid2` field. Capture records that value as "UID unavailable" instead of rejecting the vehicle. The remaining identity gate still pins system ID, component ID, exact firmware, vehicle type, gateway target and the complete reviewed parameter set.
+
 The reviewed configuration must confirm:
 
 - Flight-controller identity and firmware.

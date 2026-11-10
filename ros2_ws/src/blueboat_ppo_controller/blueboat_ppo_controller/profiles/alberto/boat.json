@@ -15,7 +15,7 @@
   },
   "unknown": [
     "actual servo neutral and forward sign",
-    "hardware UID, component ID and encoded firmware version",
+    "component ID, encoded firmware version and hardware UID when the flight controller provides one",
     "IMU offset from COM",
     "mass uncertainty",
     "completed takeover/failsafe/SITL/telemetry tests",

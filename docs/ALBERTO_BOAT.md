@@ -38,7 +38,7 @@ The actual deployment package remains [`ros2_ws/src/blueboat_ppo_controller/`](.
 | `README.md` | Profile summary and known blockers |
 | `gateway.json`, `ground.key` | Created locally by `gateway-configure`; endpoints and private operator grant key. Never commit them. |
 
-Run directories are placed under that same local directory's `runs/calibration/` and `runs/ppo/`. Session CSV/JSON/events belong together; analysis output directories must be new. The generic SITL templates remain separate: **do not use this hardware UID/profile for SITL**. Do not commit live captures, operator evidence or generated configurations back into the repository.
+Run directories are placed under that same local directory's `runs/calibration/` and `runs/ppo/`. Session CSV/JSON/events belong together; analysis output directories must be new. The generic SITL templates remain separate: **do not use this hardware profile for SITL**. Do not commit live captures, operator evidence or generated configurations back into the repository.
 
 ## Install once on the Jetson
 
@@ -77,7 +77,7 @@ The shipped 23 kg is an approximate operator report, not a measurement made by t
 ./scripts/alberto.sh status
 ```
 
-`capture` requires connected MAVROS and reads only `vehicle_info_get`, `param/pull`, and `param/get_parameters`. It records actual sysid/compid/encoded firmware version/hardware UID and all pinned parameters, reports differences, and fills the live identity fields. It refuses a missing hardware UID or unexpected system ID. It does **not** adopt changed parameter values as approved expectations, set any FC parameter, or mark tests passed. Captures use unique filenames. Stop running controller/calibration nodes before changing or capturing configuration; they do not hot-reload local files. Running capture/configure clears local interface approval and verification flags; do them before the final evidence review.
+`capture` requires connected MAVROS and reads only `vehicle_info_get`, `param/pull`, and `param/get_parameters`. It records actual sysid/compid/encoded firmware version, the hardware UID when supplied, and all pinned parameters. Alberto's current FC reports `uid=0` and its MAVROS `VehicleInfo` has no `uid2`; capture therefore records UID unavailable and relies on the exact system/component, firmware, vehicle type, gateway target and parameter set. It still refuses an unexpected system ID. It does **not** adopt changed parameter values as approved expectations, set any FC parameter, or mark tests passed. Captures use unique filenames. Stop running controller/calibration nodes before changing or capturing configuration; they do not hot-reload local files. Running capture/configure clears local interface approval and verification flags; do them before the final evidence review.
 
 Default MAVROS topics/services match the existing package. If the namespace differs, edit the two local YAML files once, including `vehicle_info_service`, `param_pull_service`, `param_get_service` when needed. Topic names cannot be inferred from an ArduPilot parameter export. Hardware launches use wall clock by default. All required timestamps, frames, sensor rates and estimator flags are still checked.
 

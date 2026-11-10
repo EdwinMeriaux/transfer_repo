@@ -30,8 +30,9 @@ class MotorInterface:
         for key in ('sysid', 'compid', 'flight_sw_version', 'uid'):
             if type(config.get(key)) is not int or config[key] < 0:
                 raise ValueError('Missing verified vehicle identity: ' + key)
-        if config['flight_sw_version'] == 0 or (target == 'hardware' and config['uid'] == 0):
-            raise ValueError('Actual firmware version and hardware UID are required')
+        if not 1 <= config['sysid'] <= 255 or not 1 <= config['compid'] <= 255 or config['flight_sw_version'] == 0:
+            raise ValueError('Actual system, component and firmware identity are required')
+        self.uid_available = config['uid'] != 0
         self.config = config
         self.channels = [config[name]['rc_channel'] for name in ('left', 'right')]
         if any(type(channel) is not int or not 1 <= channel <= 8 for channel in self.channels) or len(set(self.channels)) != 2:

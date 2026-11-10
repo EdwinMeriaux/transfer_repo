@@ -86,7 +86,7 @@ On the QGC computer:
 python3 ground_owner.py auto --gateway GATEWAY_IP:14604 --key-file /path/to/ground.key
 ```
 
-Keep that process running. Each lease requires a single-use server challenge (0.25 s lifetime) and HMAC authentication, and lasts 0.5 s; the client renews every 0.1 s. The gateway separately requires a genuine QGC heartbeat within 2.5 s and a healthy FC heartbeat within 2 s, with matching UID/firmware refreshed within 15 s. Latency outside these limits causes refusal/stop; these are software deadlines, not measured physical stop times.
+Keep that process running. Each lease requires a single-use server challenge (0.25 s lifetime) and HMAC authentication, and lasts 0.5 s; the client renews every 0.1 s. The gateway separately requires a genuine QGC heartbeat within 2.5 s and a healthy FC heartbeat within 2 s, with matching recorded UID/firmware refreshed within 15 s. A recorded zero UID means unavailable, not a wildcard: live messages must continue reporting zero while system/component, firmware and parameter checks remain exact. Latency outside these limits causes refusal/stop; these are software deadlines, not measured physical stop times.
 
 While AUTO owns output:
 
@@ -135,6 +135,6 @@ Use a separate SITL instance/profile first. Record software versions, routes/sta
 | `gcs_ground_loss_tested` | Stop grant client, stop QGC alone, disconnect ground network, replay/delay grants; observe actual output and elapsed time. |
 | `gcs_router_failure_tested` | Kill gateway and MAVProxy separately, stop MAVROS/controller, interrupt FC link; measure independent FC fallback and recovery without stale output. |
 
-Also test stale/replayed motor requests, simultaneous PPO/calibrator starts, delayed telemetry, mismatched UID/firmware/parameters, mode changes, and logging/CPU/network load. Retain existing interface/paired output/SITL calibration/telemetry/IMU evidence. Store evidence files and SHA in the local profile; hardware GCS flags require review of this installation's evidence, not the synthetic fixtures in `tests/`. Keep physical tests supervised and bounded.
+Also test stale/replayed motor requests, simultaneous PPO/calibrator starts, delayed telemetry, mismatched recorded UID/firmware/parameters, mode changes, and logging/CPU/network load. Retain existing interface/paired output/SITL calibration/telemetry/IMU evidence. Store evidence files and SHA in the local profile; hardware GCS flags require review of this installation's evidence, not the synthetic fixtures in `tests/`. Keep physical tests supervised and bounded.
 
 The checked-in tests exercise protocol state, authentication/replay, real localhost UDP and Unix sockets, mocked ROS node paths, and (when installed) an actual MAVProxy relay against a **fake MAVLink vehicle**. They do not validate ArduPilot mixer physics, QGC UI behavior, ROS serialization, signed FC acceptance, propellers or stopping distance. Gateway transition logs and local status live beside `gateway.json`; preserve them with acceptance evidence. A stale `.sock.lock` after a hard kill is deliberately refused: verify the old process is gone and the FC has stopped before removing that socket/lock and restarting.

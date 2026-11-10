@@ -127,7 +127,7 @@ def test_capture_reads_services_only_and_never_approves(bundle,monkeypatch):
     from blueboat_ppo_controller.boat_capture import capture
     profile=json.loads((bundle/'motor_interface.json').read_text())
     calls=[]
-    info=S(available_info=3,autopilot=3,type=11,sysid=1,compid=1,flight_sw_version=0x040602ff,uid=7654321)
+    info=S(available_info=3,autopilot=3,type=11,sysid=1,compid=1,flight_sw_version=0x040602ff,uid=0)
     replies=[S(success=True,vehicles=[info]),S(success=True),S(values=[S(type=3,double_value=v) for v in profile['expected_parameters'].values()])]
     class Message:
         def __init__(self,**kwargs): self.__dict__.update(kwargs)
@@ -146,10 +146,14 @@ def test_capture_reads_services_only_and_never_approves(bundle,monkeypatch):
     capture(bundle,profile)
     assert calls==['/mavros/vehicle_info_get','/mavros/param/pull','/mavros/param/get_parameters']
     saved=json.loads((bundle/'motor_interface.json').read_text())
-    assert saved['uid']==7654321 and saved['flight_sw_version']==0x040602ff
+    assert saved['uid']==0 and saved['flight_sw_version']==0x040602ff
     assert saved['verified'] is False and all(saved[k] is False for k in CHECKS)
     assert saved['expected_parameters']==json.loads((BUNDLE/'observed_parameters.json').read_text())
+    status=report(bundle)
+    assert any('reports no hardware UID' in warning for warning in status['warnings'])
+    assert not any('hardware identity: uid' in blocker for blocker in status['blockers'])
     snapshot=json.loads(next(bundle.glob('live-capture-*.json')).read_text())
+    assert snapshot['identity_basis']=='system_component_firmware_and_parameters'
     assert snapshot['parameter_differences']=={}
 
 

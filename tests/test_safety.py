@@ -36,6 +36,19 @@ def test_calibration_limits_and_identity(calibration):
     with pytest.raises(ValueError): MotorAdapter(calibration,'hardware')
 
 
+def test_hardware_identity_allows_recorded_unavailable_uid(calibration):
+    config=json.loads(calibration.read_text())
+    config.update(target='hardware',uid=0,sitl_test_passed=True,restrained_motor_test_passed=True)
+    calibration.write_text(json.dumps(config))
+    motor=MotorAdapter(calibration,'hardware')
+    assert not motor.uid_available
+    info=S(available_info=3,autopilot=3,type=11,sysid=1,compid=1,
+           flight_sw_version=config['flight_sw_version'],uid=0)
+    assert motor.verify_vehicle(info)
+    info.uid=1
+    assert not motor.verify_vehicle(info)
+
+
 @pytest.mark.parametrize('field,value',[('verified',False),('neutral_verified',False),('manual_takeover_tested',False),('enable_rc_channel',1),('maximum_abs_force_N',float('nan'))])
 def test_unverified_calibration_rejected(calibration,field,value):
     c=json.loads(calibration.read_text()); c[field]=value

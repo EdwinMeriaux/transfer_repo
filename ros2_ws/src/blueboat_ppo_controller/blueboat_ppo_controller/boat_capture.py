@@ -35,8 +35,10 @@ def capture(directory, profile):
         info = vehicles.vehicles[0]
         if not info.available_info & 2 or info.autopilot != 3 or info.type not in (10,11):
             raise ValueError('Expected one ArduPilot rover/boat with known firmware identity')
-        if info.sysid != profile['sysid'] or not info.uid:
-            raise ValueError('Unexpected system ID or missing hardware UID; do not adopt another vehicle')
+        if info.sysid != profile['sysid']:
+            raise ValueError('Unexpected system ID; do not adopt another vehicle')
+        if not 1 <= info.compid <= 255 or not info.flight_sw_version:
+            raise ValueError('Missing component or firmware identity')
         actual = {}
         if len(parameters.values) != len(profile['expected_parameters']):
             raise ValueError('Incomplete parameter response')
@@ -47,7 +49,9 @@ def capture(directory, profile):
         differences = {key:dict(expected=value, actual=actual[key]) for key,value in profile['expected_parameters'].items()
                        if abs(actual[key]-value) > 1e-5}
         identity = {key:getattr(info,key) for key in ('sysid','compid','flight_sw_version','uid')}
-        snapshot = dict(identity=identity, actual_parameters=actual, parameter_differences=differences,
+        snapshot = dict(identity=identity,
+                        identity_basis=('hardware_uid' if info.uid else 'system_component_firmware_and_parameters'),
+                        actual_parameters=actual, parameter_differences=differences,
                         note='Read-only MAVROS capture. No parameters written, motors commanded, or tests marked passed.')
         filename = directory/f'live-capture-{time.time_ns()}.json'
         write_json(filename, snapshot)

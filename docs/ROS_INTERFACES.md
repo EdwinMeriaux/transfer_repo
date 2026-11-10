@@ -35,7 +35,7 @@ The [MAVROS message definition](https://github.com/mavlink/mavros/blob/ros2/mavr
 
 Every 5 s, subject to service completion:
 
-1. `/mavros/vehicle_info_get`, `mavros_msgs/srv/VehicleInfoGet`: require one matching ArduPilot rover/boat, known version, exact sysid/compid/firmware integer/UID from calibration.
+1. `/mavros/vehicle_info_get`, `mavros_msgs/srv/VehicleInfoGet`: require one matching ArduPilot rover/boat and exact sysid/compid/firmware/recorded UID fields from calibration. A recorded zero UID means the FC did not provide one; the remaining identity and pinned-parameter checks still apply.
 2. `/mavros/param/pull`, `mavros_msgs/srv/ParamPull`, `force_pull: true`: refresh flight-controller parameters.
 3. `/mavros/param/get_parameters`, `rcl_interfaces/srv/GetParameters`: compare all calibration-pinned values.
 
