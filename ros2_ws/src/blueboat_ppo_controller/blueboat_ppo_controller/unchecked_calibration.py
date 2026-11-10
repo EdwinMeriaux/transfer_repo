@@ -8,12 +8,15 @@ import argparse
 import csv
 import json
 from pathlib import Path
+import signal
 import sys
+import threading
 import time
 
 import rclpy
 from mavros_msgs.msg import OverrideRCIn
 from rclpy.node import Node
+from rclpy.signals import SignalHandlerOptions
 
 from .mavros_interface import rc_override
 from .thrust_calibration import PulsePlan
@@ -115,17 +118,24 @@ def main(argv=None):
     parsed = arguments(argv)
     if not parsed.delta or any(value == 0 or abs(value) > 250 for value in parsed.delta):
         raise ValueError('PWM deltas must be nonzero and no greater than 250 counts')
-    rclpy.init(args=[])
-    node = UncheckedCalibrationNode(parsed)
+    rclpy.init(args=[], signal_handler_options=SignalHandlerOptions.NO)
+    stop_requested = threading.Event()
+    handlers = {sig: signal.signal(sig, lambda number, frame: stop_requested.set())
+                for sig in (signal.SIGINT, signal.SIGTERM)}
+    node = None
     try:
-        while rclpy.ok() and not node.finished:
+        node = UncheckedCalibrationNode(parsed)
+        while rclpy.ok() and not node.finished and not stop_requested.is_set():
             rclpy.spin_once(node, timeout_sec=0.1)
     except KeyboardInterrupt:
         pass
     finally:
-        if rclpy.ok():
+        if node is not None and rclpy.ok():
             node.stop()
-        node.destroy_node()
+        if node is not None:
+            node.destroy_node()
+        for sig, handler in handlers.items():
+            signal.signal(sig, handler)
         if rclpy.ok():
             rclpy.shutdown()
     return 0
