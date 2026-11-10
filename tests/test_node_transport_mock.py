@@ -196,3 +196,33 @@ def test_parameter_mismatch_stops_control(node_factory):
     node.parameters_received(S(result=lambda: S(values=[])))
     assert node.gate.fault == 'parameter_mismatch'
     assert not node.parameters_valid
+
+
+def test_gcs_node_waits_for_grant_uses_local_socket_and_latches_loss(node_factory, gateway_files):
+    import json
+    import socket
+    from pathlib import Path
+    from blueboat_ppo_controller.authority import Authority, gateway_config
+    directory, _ = gateway_files
+    config = gateway_config(directory/'gateway.json')
+    listener = socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM)
+    listener.bind(config['socket_file']); listener.settimeout(.5)
+    try:
+        node = node_factory('actuator')
+        assert node.gateway is not None and node.output is None
+        assert '/mavros/rc/override' not in node.publishers
+        node.rc_enabled = False; node.receipts.pop('rc')
+        node.control()
+        assert not node.gate.active and not node.gate.fault
+        a = Authority(True); now = time.monotonic(); a.ground_seen=now; a.vehicle(now,True,0,True)
+        assert a.request('auto',now)
+        Path(config['status_file']).write_text(json.dumps(a.status(now,config['config_sha256'])))
+        node.control()
+        payload = json.loads(listener.recv(4096))
+        assert payload['pwm'] is not None and payload['session']==a.session and node.gate.active
+        Path(config['status_file']).unlink()
+        node.control()
+        assert node.gate.fault=='gcs_authority_lost' and not node.owns_output
+        node.close()
+    finally:
+        listener.close()

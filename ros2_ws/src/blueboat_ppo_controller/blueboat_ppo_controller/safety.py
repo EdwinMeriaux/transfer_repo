@@ -17,7 +17,7 @@ class SafetyGate:
         self.closed = False
 
 
-    def check(self, now, receipts, connected, armed, vehicle_mode, enabled, rc_enabled, parameters_valid):
+    def check(self, now, receipts, connected, armed, vehicle_mode, enabled, rc_enabled, parameters_valid, authority_valid=None):
         if self.closed:
             return 'shutdown'
         if self.fault:
@@ -35,8 +35,11 @@ class SafetyGate:
                 return 'manual_takeover_or_disarmed'
             if not enabled or not 0 <= now - receipts.get('enable', -math.inf) <= .5:
                 return 'enable_released'
-            if not rc_enabled or not 0 <= now - receipts.get('rc', -math.inf) <= .5:
-                return 'manual_takeover'
+            if authority_valid is None:
+                if not rc_enabled or not 0 <= now - receipts.get('rc', -math.inf) <= .5:
+                    return 'manual_takeover'
+            elif not authority_valid:
+                return 'gcs_authority_lost'
             if not parameters_valid or not 0 <= now - receipts.get('parameters', -math.inf) <= 15.:
                 return 'parameters_unverified'
         return None

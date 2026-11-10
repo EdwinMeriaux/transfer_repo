@@ -418,3 +418,32 @@ def test_callbacks_csv_estimator_and_ppo_inverse_end_to_end(calibration_node,mon
     assert 1540<=pwm[0]<=1560 and 1450<=pwm[1]<=1470
     with pytest.raises(ValueError,match='measured region'):
         motor.convert([.1,0.])
+
+
+def test_gcs_calibration_uses_gateway_records_commands_and_stops_on_loss(calibration_node, gateway_files):
+    import socket
+    from pathlib import Path
+    from blueboat_ppo_controller.authority import Authority, gateway_config
+    directory, _ = gateway_files
+    config = gateway_config(directory/'gateway.json')
+    listener=socket.socket(socket.AF_UNIX,socket.SOCK_DGRAM)
+    listener.bind(config['socket_file']);listener.settimeout(.5)
+    try:
+        node=calibration_node('powered')
+        assert node.gateway is not None and node.output is None and node.graph_valid
+        assert '/mavros/rc/override' not in node.publishers
+        node.rc_enabled=False;node.receipts.pop('rc')
+        node.control()
+        assert node.plan.started is None and node.fault is None
+        a=Authority(True);now=time.monotonic();a.ground_seen=now;a.vehicle(now,True,0,True);assert a.request('auto',now)
+        Path(config['status_file']).write_text(json.dumps(a.status(now,config['config_sha256'])))
+        node.control()
+        payload=json.loads(listener.recv(4096))
+        assert payload['pwm']==node.neutral and node.command==node.neutral
+        assert node.command_time is not None and node.owns_output
+        Path(config['status_file']).unlink()
+        node.control()
+        assert node.fault=='gcs_authority_lost' and not node.owns_output
+        node.close()
+    finally:
+        listener.close()

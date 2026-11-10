@@ -32,7 +32,7 @@ flowchart LR
 
 ## Alberto’s physical boat configuration
 
-The [boat-specific guide](docs/ALBERTO_BOAT.md) provides the prefilled November 9 parameter profile, corrected servo mapping, configurable 23 kg mass and short field commands. Run `./scripts/install_alberto.sh` on the Humble machine, then `./scripts/alberto.sh status`. Joystick/GCS takeover is confirmed. The supplied settings are preserved; powered modes are blocked pending [GCS handoff integration](docs/GCS_HANDOFF.md), remaining mapping issues and measurements. Telemetry/dry-run/shadow are available.
+The [boat-specific guide](docs/ALBERTO_BOAT.md) provides the prefilled November 9 parameter profile, corrected servo mapping, configurable 23 kg mass and short field commands. Run `./scripts/install_alberto.sh` on the Humble machine, then `./scripts/alberto.sh status`. QGroundControl and network MAVProxy routing are confirmed. An [exclusive gateway](docs/GCS_HANDOFF.md) now handles manual/PPO/calibration ownership and independent ground grants. The supplied settings are preserved; powered modes remain blocked by unverified routing, parameter conflicts, measurements and on-boat acceptance. Telemetry/dry-run/shadow are available.
 
 ## Quick start: inference and ROS 2 shadow mode
 

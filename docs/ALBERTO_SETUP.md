@@ -1,6 +1,6 @@
 # Alberto: install and test the BlueBoat PPO controller
 
-**For the actual boat and parameter export supplied on 2026-11-09, start with [ALBERTO_BOAT.md](ALBERTO_BOAT.md).** It bundles the configuration, maps left to servo3/right to servo1 while preserving RC input routing, and adds short install/capture/run commands. Joystick/GCS control is now confirmed; its powered handoff is not implemented—see [GCS_HANDOFF.md](GCS_HANDOFF.md). This page remains the generic receiver-based integration reference.
+**For the actual boat and parameter export supplied on 2026-11-09, start with [ALBERTO_BOAT.md](ALBERTO_BOAT.md).** It bundles the configuration, maps left to servo3/right to servo1 while preserving RC input routing, and adds short install/capture/run commands. QGroundControl/MAVProxy control is confirmed; the gateway and acceptance procedure are in [GCS_HANDOFF.md](GCS_HANDOFF.md). This page remains the generic receiver-based integration reference.
 
 Target: Ubuntu 22.04, ROS 2 Humble, Jetson AGX Orin. This guide assumes your existing MAVROS, ArduRover SITL and Gazebo vehicle already work. It does not install a second flight controller, replace your world or change your ArduPilot parameters.
 

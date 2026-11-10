@@ -23,6 +23,7 @@ from .observation_adapter import ObservationAdapter
 from .motor_adapter import MotorAdapter
 from .mavros_interface import rc_override, telemetry_from_messages
 from .safety import SafetyGate
+from .authority import GatewayClient
 
 
 class PPONode(Node):
@@ -42,11 +43,15 @@ class PPONode(Node):
         self.gate = SafetyGate(self.settings['mode'], self.settings['telemetry_timeout_s'], self.settings['command_timeout_s'], self.settings['watchdog_timeout_s'])
         self.motor = None
         self.output = None
+        self.gateway = None
         if self.gate.mode == 'actuator':
             if not self.settings['enable_actuators']:
                 raise ValueError('Actuator mode also requires enable_actuators:=true')
             self.motor = MotorAdapter(self.settings['calibration_file'], self.settings['deployment_target'])
-            self.output = self.create_publisher(OverrideRCIn, self.settings['rc_override_topic'], 1)
+            if self.motor.authority == 'joystick_gcs':
+                self.gateway = GatewayClient(self.settings['calibration_file'], self.motor)
+            else:
+                self.output = self.create_publisher(OverrideRCIn, self.settings['rc_override_topic'], 1)
         self.lock = threading.RLock()
         self.receipts, self.stamps = {}, {}
         self.odom = self.imu = self.vehicle = None
@@ -150,7 +155,7 @@ class PPONode(Node):
 
 
     def rc_callback(self, message):
-        if self.motor:
+        if self.motor and self.motor.enable_channel is not None:
             channel = self.motor.enable_channel
             self.rc_enabled = len(message.channels) >= channel and 1800 <= message.channels[channel - 1] <= 2200
             self.receipts['rc'] = time.monotonic()
@@ -212,7 +217,7 @@ class PPONode(Node):
 
     def permission(self, now):
         vehicle = self.vehicle
-        reason = self.gate.check(now, self.receipts, bool(vehicle and vehicle.connected and vehicle.system_status in (3, 4)), bool(vehicle and vehicle.armed), vehicle.mode if vehicle else '', self.enabled, self.rc_enabled, self.parameters_valid)
+        reason = self.gate.check(now, self.receipts, bool(vehicle and vehicle.connected and vehicle.system_status in (3, 4)), bool(vehicle and vehicle.armed), vehicle.mode if vehicle else '', self.enabled, self.rc_enabled, self.parameters_valid, self.gateway.granted(now) if self.gateway else None)
         if reason:
             return reason
         if self.motor and not self.vehicle_verified:
@@ -228,7 +233,9 @@ class PPONode(Node):
 
 
     def publish_pwm(self, pwm):
-        if self.output is not None:
+        if self.gateway:
+            self.gateway.publish(pwm)
+        elif self.output is not None:
             self.output.publish(OverrideRCIn(channels=rc_override(self.motor.channels, pwm)))
 
 
@@ -236,8 +243,8 @@ class PPONode(Node):
         with self.lock:
             if self.gate.mode == 'actuator' and (self.gate.active or self.owns_output):
                 self.gate.trip(reason)
-                if reason in ('manual_takeover', 'manual_takeover_or_disarmed', 'enable_released', 'shutdown'):
-                    if reason == 'shutdown':
+                if self.gateway or reason in ('manual_takeover', 'manual_takeover_or_disarmed', 'enable_released', 'shutdown'):
+                    if reason == 'shutdown' and not self.gateway:
                         self.publish_pwm(self.motor.neutral())
                     self.publish_pwm(None)
                     self.owns_output = False
@@ -315,6 +322,8 @@ class PPONode(Node):
         except Exception:
             self.get_logger().error('Shutdown log could not be written')
         self.log.close()
+        if self.gateway:
+            self.gateway.close()
         self.destroy_node()
 
 

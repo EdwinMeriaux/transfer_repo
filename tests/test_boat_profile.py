@@ -31,7 +31,7 @@ def test_export_mapping_input_output_and_no_assumed_servo_neutral(bundle):
         assert p[side]['servo_neutral_pwm'] is None and p[side]['servo_forward_pwm_sign'] is None
     message = rc_override([p[s]['rc_channel'] for s in ('left','right')], [1540,1500])
     assert message[:3] == [1540,65535,1500]
-    with pytest.raises(ValueError, match='Joystick/GCS'):
+    with pytest.raises(ValueError, match='verified motor interface'):
         MotorInterface(bundle/'motor_interface.json','hardware')
 
 
@@ -173,11 +173,11 @@ def test_analysis_uses_session_mass_and_checks_routing(bundle,tmp_path,monkeypat
     assert len(measured)==1
 
 
-def test_gcs_authority_cannot_be_enabled_by_approval_flags(bundle):
+def test_gcs_flags_do_not_replace_missing_vehicle_evidence(bundle):
     profile=json.loads((bundle/'motor_interface.json').read_text())
     profile.update(verified=True, **{key:True for key in CHECKS})
     (bundle/'motor_interface.json').write_text(json.dumps(profile))
-    with pytest.raises(ValueError,match='Joystick/GCS command arbitration is not implemented'):
+    with pytest.raises((ValueError, OSError)):
         MotorInterface(bundle/'motor_interface.json','hardware')
     assert not report(bundle)['powered_ready']
     with pytest.raises(ValueError,match='Joystick/GCS'):

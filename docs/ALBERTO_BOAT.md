@@ -1,8 +1,8 @@
 # Alberto's BlueBoat: prefilled hardware bundle and field commands
 
-This is the short path for the actual boat described on **2026-11-09**. Manual control is now confirmed as **joystick + GCS**; see [the required GCS handoff integration](GCS_HANDOFF.md). All local configuration files are kept together; no repeated copying of individual fields from the parameter export is needed. It builds on the existing [setup guide](ALBERTO_SETUP.md) and [effective thrust calibration procedure](THRUST_CALIBRATION.md).
+This is the short path for the actual boat described on **2026-11-09**. Manual control is confirmed as **QGroundControl + joystick, with network MAVProxy endpoints for both QGC and MAVROS**; see [the implemented gateway and handoff procedure](GCS_HANDOFF.md). All local configuration files are kept together; no repeated copying of individual fields from the parameter export is needed. It builds on the existing [setup guide](ALBERTO_SETUP.md) and [effective thrust calibration procedure](THRUST_CALIBRATION.md).
 
-**Available now:** install, offline inference, telemetry recording, dry-run, shadow, read-only identity/parameter capture, command-line mass/measurement updates, and analysis using recorded session mass. **Powered calibration/PPO remain blocked** because joystick/GCS command arbitration and independent ground-link loss handling are not implemented, in addition to the remaining mapping/measurement/tests. Marking verification flags true cannot enable this unsupported authority. The export is not a thrust calibration or a record of completed safety tests. No command in this workflow changes flight-controller parameters, mode or arming.
+**Available now:** install, inference, telemetry, dry-run/shadow, read-only capture, mass/measurement configuration, analysis, and a gateway enforcing exclusive QGC/PPO/calibration ownership. **The supplied hardware profile still blocks powered operation** until routing, compatible parameters, actual measurements and acceptance evidence are reviewed. Local tests do not establish on-boat readiness. Configuration commands never write FC parameters or arm; the explicitly enabled gateway can request HOLD when stopping and forwards authorized manual commands. The export is not a thrust calibration. See [GCS_HANDOFF.md](GCS_HANDOFF.md) before changing routes or enabling forwarding.
 
 ## Exactly what was populated
 
@@ -31,11 +31,12 @@ The actual deployment package remains [`ros2_ws/src/blueboat_ppo_controller/`](.
 |---|---|
 | `boat.json` | 23 kg reported mass, provenance and outstanding measurements |
 | `observed_parameters.json` | Relevant actual exported values, unchanged; not an FC parameter-upload file |
-| `motor_interface.json` | Correct routing/RC neutral and confirmed `joystick_gcs` authority; handoff integration, identity, output measurements and evidence remain pending |
+| `motor_interface.json` | Correct routing/RC neutral and confirmed `joystick_gcs` authority; gateway configuration, identity, output measurements and acceptance evidence remain pending |
 | `thrust_calibration.yaml` | 23 kg, default dry-run, original bounded pulse plan and telemetry limits |
 | `controller.yaml` | Default PPO shadow mode, exact bundled model |
 | `analysis.json` | Analysis options; mass uncertainty and COM→IMU offset must be supplied, not guessed |
 | `README.md` | Profile summary and known blockers |
+| `gateway.json`, `ground.key` | Created locally by `gateway-configure`; endpoints and private operator grant key. Never commit them. |
 
 Run directories are placed under that same local directory's `runs/calibration/` and `runs/ppo/`. Session CSV/JSON/events belong together; analysis output directories must be new. The generic SITL templates remain separate: **do not use this hardware UID/profile for SITL**. Do not commit live captures, operator evidence or generated configurations back into the repository.
 
@@ -119,14 +120,15 @@ These are findings, **not commands to apply blindly**. The software preserves ev
 
 | Exported value | Why it blocks this integration / required review |
 |---|---|
-| `RC_OPTIONS=37` | Bits 0 and 2 ignore the physical receiver/failsafe flags. This is consistent with the confirmed joystick/GCS architecture; retain the observed value. It requires a GCS command-arbitration and ground-link-loss integration, which is currently unimplemented. |
+| `RC_OPTIONS=37` | Bits 0 and 2 ignore the physical receiver/failsafe flags. This is consistent with the confirmed joystick/GCS architecture; retain the observed value. The gateway implements independent ground grants and command arbitration; test the actual routes and loss behavior. |
 | All `RCn_OPTION=0` | No physical receiver-enable switch is claimed or requested for this GCS setup. The local `enable_rc_channel` stays null. |
 | `RC_OVERRIDE_TIME=3` | Existing controller requires a tested positive timeout ≤0.5 s. Measure real fallback behavior after companion/network failure. |
-| `FS_THR_ENABLE=0` | Retained for this receiver-less setup. The pending GCS path needs independently verified ground/companion-link loss handling; enabling a nonexistent receiver failsafe is not a substitute. |
+| `FS_THR_ENABLE=0` | Retained for this receiver-less setup. The GCS path needs independently verified ground/companion-link loss handling; enabling a nonexistent receiver failsafe is not a substitute. |
+| `FS_ACTION=4` | SmartRTL or Hold can command motion after gateway failure; this adapter requires a tested Hold (2) or Terminate (5) fallback. |
 | `MOT_THST_ASYM=1.6` | The independent per-motor curve adapter currently requires 1. The mixer can couple commands; review/validate this mapping or implement a characterized coupled mapping before powered use. Do not just bypass the check. |
 | `SERVO1/3_TRIM=1510`, `SERVO3_REVERSED=1` | Preserve them and measure actual neutral/sign separately from the reported input-neutral 1500. |
 
-`FS_GCS_ENABLE=2`, GCS/receiver timing/actions, motor slew 200, steering/throttle mix 0.6, and mode channel 8 are retained for matching and review. Their presence is not proof that fallback behavior has been tested. The receiver-based implementation still rejects ignored receiver/failsafe bits. Alberto’s separate `joystick_gcs` authority is explicitly rejected as unimplemented even if someone changes `verified` to true. Source for those bits: [Rover 4.6.2 RC options](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/libraries/RC_Channel/RC_Channel.h); [failsafe parameters](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/Rover/Parameters.cpp).
+`FS_GCS_ENABLE=2`, GCS/receiver timing/actions, motor slew 200, steering/throttle mix 0.6, and mode channel 8 are retained for matching and review. Their presence is not proof that fallback behavior has been tested. The receiver-based implementation still rejects ignored receiver/failsafe bits. Alberto’s `joystick_gcs` authority requires the exact gateway configuration hash and completed GCS acceptance evidence. The exported 5 s GCS timeout plus 5 s failsafe timeout must be evaluated for actual stopping behavior; short gateway leases do not bound a dead gateway’s FC fallback. Source for those bits: [Rover 4.6.2 RC options](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/libraries/RC_Channel/RC_Channel.h); [failsafe parameters](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/Rover/Parameters.cpp).
 
 After the operator deliberately changes and tests vehicle parameters, export them again, then import the export with one command:
 
@@ -151,17 +153,17 @@ Use `configure` options rather than copying fields between files:
 
 Replace uppercase tokens with actual values; signs are `1` or `-1`. COM→IMU is in body FLU metres. A physically reversed left motor may have a negative servo PWM sign even though its RC input forward sign is positive; confirm both. Supplying measurements does not approve the interface. A receiver-enable channel is not a replacement for GCS handoff; the CLI rejects that option for this authority.
 
-The only remaining manual review file is the local `motor_interface.json`: provide the actual evidence path and SHA, and mark only tests actually completed. Existing requirements include interface direction/neutral/paired-output tests, telemetry and IMU placement, manual takeover/receiver/GCS/override timeout tests, SITL control and SITL calibration acceptance, and restrained control tests. Set `verified` only after review; this does not implement or unlock the pending GCS authority path. [The full calibration guide](THRUST_CALIBRATION.md) defines those tests. No executable here auto-approves them.
+The only remaining manual review file is the local `motor_interface.json`: provide the actual evidence path and SHA, and mark only tests actually completed. Existing requirements include interface direction/neutral/paired-output tests, telemetry and IMU placement, manual takeover/GCS/override timeout tests (receiver tests only for receiver installations), SITL control and SITL calibration acceptance, and restrained control tests. Set `verified` only after review; the gateway configuration and five GCS acceptance flags in [GCS_HANDOFF.md](GCS_HANDOFF.md) are also required for hardware. [The full calibration guide](THRUST_CALIBRATION.md) defines those tests. No executable here auto-approves them.
 
-## Powered collection and analysis — reference for the future GCS integration
+## Powered collection and analysis — after acceptance
 
-These commands intentionally fail for `joystick_gcs`, even with a manually verified interface. They document the downstream calibration flow; use requires an implemented and tested GCS handoff first:
+These commands remain blocked by the supplied unverified profile. After the interface, gateway routing and acceptance tests are reviewed, launch one calibrator, prepare its software enable, then grant AUTO from the QGC computer as described in [GCS_HANDOFF.md](GCS_HANDOFF.md):
 
 ```bash
 ./scripts/alberto.sh run powered --enable-actuators
 ```
 
-The operator selects MANUAL and arms through the existing tested workflow, completes the future integrated GCS ownership handoff, and starts the explicit software heartbeat in another ROS-sourced terminal only when ready:
+The operator selects MANUAL and arms through the existing tested workflow, completes the explicit ground-side ownership handoff, and starts the explicit software heartbeat in another ROS-sourced terminal only when ready:
 
 ```bash
 ros2 topic pub --rate 10 /blueboat/calibration/enable std_msgs/msg/Bool '{data: true}'
@@ -185,7 +187,7 @@ After independent review of a sufficiently covered measured mapping, PPO actuati
   --calibration /absolute/path/to/reviewed-ppo-calibration.json
 ```
 
-The normal PPO enable heartbeat `/blueboat/enable`, fresh desired Twist, valid live telemetry, identity/parameters and armed MANUAL gates still apply alongside the future GCS ownership interlock. A local heartbeat alone cannot authorize GCS handoff. See [ALBERTO_SETUP.md](ALBERTO_SETUP.md) for that sequence. The trained model, observation layout, action scaling and force envelope have not changed.
+The normal PPO enable heartbeat `/blueboat/enable`, fresh desired Twist, valid live telemetry, identity/parameters and armed MANUAL gates still apply alongside the fresh gateway ownership grant. A local heartbeat alone cannot authorize GCS handoff. See [GCS_HANDOFF.md](GCS_HANDOFF.md) for that sequence. The trained model, observation layout, action scaling and force envelope have not changed.
 
 ## Stop
 

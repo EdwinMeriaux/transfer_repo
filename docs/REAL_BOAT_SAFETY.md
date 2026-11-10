@@ -1,5 +1,7 @@
 # Calibration and real-boat acceptance
 
+**Alberto's QGroundControl/MAVProxy installation:** use [GCS_HANDOFF.md](GCS_HANDOFF.md) and [ALBERTO_BOAT.md](ALBERTO_BOAT.md). The receiver/switch requirements below describe the generic `rc_receiver` path. For `joystick_gcs`, a fresh authenticated ground grant replaces that switch, and PWM requests go through a local Unix socket to the exclusive MAVLink gateway. The gateway owns neutral/HOLD/release on faults; MAVROS is telemetry/read-only. All measurement, telemetry, evidence and calibration limits still apply.
+
 The implemented powered path below assumes a physical RC receiver. Alberto’s joystick/GCS authority is explicitly blocked pending [a separate handoff integration](GCS_HANDOFF.md); do not add a receiver or change his receiver-related parameters merely to satisfy this path.
 
 Physical actuation is disabled by default. The shipped calibration is intentionally incomplete and cannot enable actuator mode. This repository has no physical BlueBoat measurements and no completed ArduPilot SITL trial. ONNX/Gazebo agreement alone does not establish that the motor/estimator/network path works on hardware.

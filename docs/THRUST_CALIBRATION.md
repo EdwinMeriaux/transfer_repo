@@ -1,5 +1,7 @@
 # Alberto: IMU-based effective thrust calibration
 
+**Alberto's QGroundControl/MAVProxy installation:** use [GCS_HANDOFF.md](GCS_HANDOFF.md) and [ALBERTO_BOAT.md](ALBERTO_BOAT.md). The receiver/switch requirements below describe the generic `rc_receiver` path. For `joystick_gcs`, a fresh authenticated ground grant replaces that switch, and PWM requests go through a local Unix socket to the exclusive MAVLink gateway. The gateway owns neutral/HOLD/release on faults; MAVROS is telemetry/read-only. All measurement, telemetry, evidence and calibration limits still apply.
+
 This module measures the **initial effective surge response** to bounded RC-input PWM pulses. It does not measure static propeller thrust. Total wet boat mass, including battery and payload, is supplied as the ROS `mass_kg` parameter. The node, YAML and launch file default to **dry-run** with no motor publisher. The shipped mass is `0.0`: dry-run/telemetry are allowed, powered operation is refused.
 
 Local status: **84 tests passed, 4 skipped** on macOS; see [the validation record](validation/thrust_calibration_tests.json). ROS 2 Humble serialization and the three live ArduPilot SITL tests require Alberto's Linux installation. **No SITL or physical-boat calibration has been completed by this change.** Both templates remain unverified. The model, observation adapter, action scaling and training environment are unchanged.

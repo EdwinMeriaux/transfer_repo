@@ -1,46 +1,140 @@
-# Joystick/GCS takeover: confirmed setup, integration pending
+# QGroundControl / MAVProxy command handoff
 
-The user confirmed Alberto uses **joystick + GCS**, not a physical RC receiver/switch. The Alberto profile now records `control_authority: joystick_gcs`. Its `RC_OPTIONS=37`, `FS_THR_ENABLE=0` and missing receiver-enable switch are preserved as properties of that architecture, not instructions to add a physical receiver.
+Alberto confirmed QGroundControl with a joystick; both QGC and MAVROS currently connect through network MAVProxy endpoints. This package implements an exclusive gateway for that topology. **Local protocol/transport tests pass; the actual QGC installation, ArduRover SITL, Jetson and boat have not been tested with it.** The shipped hardware profile stays unverified. No routing, FC parameters or arming state on Alberto's boat were changed.
 
-**Powered joystick/GCS operation is not implemented in this package yet.** `MotorInterface` explicitly rejects this authority even if `verified` and every evidence flag are manually set true. Telemetry, dry-run and PPO shadow remain available. The existing `rc_receiver` implementation and its receiver checks remain intact for installations that actually use one; absent authority fields in older generic profiles retain that behavior.
+## Connection layout
 
-## Why a new authority path is necessary
+```text
+QGC computer                                      Boat / companion
+QGroundControl :14550 <------ UDP ------> gateway :14601
+blueboat_owner          ----- UDP ------> gateway :14604 (authenticated grant)
+                                               |
+MAVROS :14602 <----- loopback UDP -----> gateway :14603 (telemetry/read requests)
+PPO OR calibration ---- local socket --> gateway gw.sock (bounded PWM requests)
+                                               |
+                                          gateway :14600
+                                               |
+                                    ONE MAVProxy --out endpoint
+                                               |
+                                        existing FC link
+```
 
-Reviewed [ArduPilot Rover-4.6.2 GCS_Common.cpp](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/libraries/GCS_MAVLink/GCS_Common.cpp):
+Run the gateway, MAVROS and the controller/calibrator on the **same Linux host**. Leave the FC connection with MAVProxy. Route **all** ground and companion commands through the gateway; remove previous direct QGC/MAVROS outputs, forwarding bridges, auto-connect paths, RC-input ports, other GCS clients and router control modules. A second route around the gateway defeats arbitration. Keep existing MAVLink signing/authentication and verify it end to end; the grant protocol does not replace FC link security. Use the trusted boat network and restrict these UDP listeners to the stated peers.
 
-- `handle_rc_channels_override` and `handle_manual_control` accept commands from `sysid_my_gcs()`; merely choosing a different companion sysid does not establish a second independent authorized control channel.
-- `handle_heartbeat` updates GCS liveness for that system ID; manual-control messages also update it. If the companion uses the accepted GCS identity, its continued traffic can mask loss of the ground connection.
-- The standard receiver option/failsafe bits have their documented meanings in [RC_Channel.h](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/libraries/RC_Channel/RC_Channel.h). Ignoring a nonexistent receiver is consistent with the confirmed setup, but does not create command arbitration.
+MAVROS is telemetry/read-only through this endpoint: its heartbeats, overrides, setpoints, parameter writes, arm and mode commands are dropped. Use QGC for deliberate manual actions. Gateway-generated RC overrides use the pinned GCS system ID; there is no velocity-setpoint fallback. PPO retains its original force output and measured PWM conversion.
 
-A ROS Bool published on the companion proves only that a local process is publishing. It does not prove the joystick is disabled, the operator remains connected, or that no other MAVLink source is commanding the boat. ROS publisher discovery does not see a joystick's direct MAVLink traffic. Therefore the existing receiver interlock cannot simply be replaced by an always-true value or a second local heartbeat.
+## Prepare once
 
-## Information still needed
+Update/install with `scripts/install_alberto.sh` as in [ALBERTO_BOAT.md](ALBERTO_BOAT.md). The installer includes the `handoff` extra (`pymavlink`). Supply the QGC computer's actual reachable IPv4 address, and the MAVProxy host's address as seen from the gateway:
 
-Identify the GCS software/version (for example QGroundControl or BlueOS Cockpit), connection topology (BlueOS/mavlink-router/direct MAVROS), the joystick's actual message type and source IDs, and where all motor-command traffic passes. Document the operator's existing stop/disarm action and the actual effect of ground-link loss. The operator-confirmed phrase "joystick + GCS" resolves the receiver question, but does not identify these routing details.
+```text
+./scripts/alberto.sh gateway-configure --qgc-ip QGC_IP --mavproxy-ip MAVPROXY_IP
+```
 
-## Required implementation and acceptance
+Use `127.0.0.1` for MAVProxy only when it runs on the same companion. QGC's receive port defaults to 14550; override with `--qgc-port PORT`. `--mavproxy-port 0` learns and pins the UDP source port from the first correctly identified FC heartbeat on that host; use a known fixed source port if available. `--vehicle-component` defaults to 1 and must match the captured FC identity. Configure creates `gateway.json` and a random private `ground.key` beside the other local files, records the exact configuration hash in `motor_interface.json`, and clears old approvals. It does not change any remote routing or parameters. Existing keys are retained. Stop running processes before editing/reconfiguring; changing the gateway file invalidates the pinned hash.
 
-The next implementation must establish one enforced motor-command authority at a point that observes both sources, not just a procedural promise to avoid moving the joystick. A GCS/router integration or a single command arbiter must:
+Configure these endpoints once:
 
-1. Default to manual authority, with PPO/calibration output blocked.
-2. Accept an explicit operator handoff, suppress joystick motor-command traffic while autonomy owns output, and reject simultaneous/unknown senders. Keep stop/mode/disarm commands available.
-3. Revoke ownership immediately on the tested operator stop/mode action or loss of an independent ground-origin grant. A companion-generated heartbeat must not impersonate that ground-origin grant.
-4. Stop/neutralize through the tested vehicle mechanism, latch the autonomous controller, and acknowledge release before joystick motor commands resume. Moving a stick while PPO is active is not, by itself, an implemented takeover.
-5. Handle GCS loss while the companion remains alive, companion process failure while the GCS remains alive, router/arbiter failure, delayed/replayed grants, reconnects and rapid mode changes. Verify the FC's source authorization and heartbeat/failsafe behavior under each case.
-6. Preserve bounded override expiry and measured fallback behavior. The export's 3 s override timeout and 1.6 mixer asymmetry remain separate compatibility issues; changing the authority mechanism does not resolve thrust mapping or calibration.
+| Client | Configuration |
+|---|---|
+| MAVProxy | Keep its actual FC `--master`; use one `--out=udp:GATEWAY_IP:14600`. Disable its own heartbeats, command-generating modules and interactive control. |
+| QGC | One UDP connection, local receive port 14550, target `GATEWAY_IP:14601`. Disable old/direct/automatic links. Its source system ID must match the export's `SYSID_MYGCS=255`. |
+| MAVROS | `fcu_url: udp://127.0.0.1:14602@127.0.0.1:14603`; source `system_id: 254`, target system/component 1/1 (or captured values). Remove any MAVROS GCS forwarding URL. |
+| Ground grant client | Runs on the **QGC computer**, targets `GATEWAY_IP:14604`, using the private key copied securely from the bundle. |
 
-HOLD or disarming through the GCS may be part of the stop procedure, but the exact command and observed effect must be tested with the installed boat. Existing PPO/calibration nodes already release and latch when they observe disarming or leaving MANUAL; that alone does not filter competing MAVLink commands or independently detect ground-link loss.
+A minimal relay command shape is below; substitute the existing FC transport and gateway IP. Check installed MAVProxy options/version first. Review `~/.mavinit.scr`, `~/.mavproxy/mavinit.scr` and aircraft startup scripts: they must not add bypass outputs, heartbeats, commands or incompatible modules. Source ID 253 is deliberately distinct from the authorized GCS ID.
 
-Test the complete GCS → router → MAVROS → FC path in SITL, then the appropriate restrained hardware control tests, before collecting powered free-hull calibration data. Firmware source review, offline unit tests and a checked JSON flag are not evidence that this handoff has run. No FC parameter changes, GCS configuration changes or new motor commands were applied by this update.
+```text
+mavproxy.py --master=EXISTING_FC_LINK --out=udp:GATEWAY_IP:14600 \
+  --source-system=253 --heartbeat-rate=0 --nowait \
+  --default-modules=signing --non-interactive --streamrate=-1 --mav20
+```
 
-## Existing installed profile
+Keep the existing signing key/configuration in the signing module where used. Forwarded frames retain their bytes; gateway-generated frames need the relay/FC's tested signing arrangement. Do not disable FC signing to make them work. Our loopback relay test used an unsigned fake vehicle, not a signed boat connection. `--nowait` avoids MAVProxy's startup heartbeat-wait loop; `--heartbeat-rate=0` disables periodic heartbeats. Audit actual traffic rather than trusting options alone. Never operate a second command-capable MAVProxy console concurrently.
 
-After updating the repository and reinstalling/rebuilding using the installer, record the confirmed authority in an existing local bundle with:
+Start read-only monitor mode on the companion:
 
 ```bash
-./scripts/alberto.sh configure --control-authority joystick_gcs
+./scripts/alberto.sh gateway
+```
+
+Monitor forwards FC telemetry and read requests only; it cannot grant autonomy or pass manual motor/mode/arming commands. Use it to inspect wiring, capture identity and parameters, and record telemetry with propulsion isolated. The usual commands remain:
+
+```bash
+./scripts/alberto.sh capture
 ./scripts/alberto.sh status
 ./scripts/alberto.sh run telemetry
 ```
 
-Configuration changes clear previous approvals, keep the exported parameters, and remove the unused local receiver-enable channel. Stop any running controller before editing local configuration. Newly initialized bundles already carry the confirmed authority. `status` exits 2 while the handoff implementation and remaining measurements/tests are pending. Do not change the authority back to `rc_receiver` merely to bypass this block.
+The ground grant tool uses only Python's standard library. On the QGC computer, install the package if desired, or copy **only** `ros2_ws/src/blueboat_ppo_controller/blueboat_ppo_controller/ground_owner.py` plus the private `ground.key` and run `python3 ground_owner.py ...`. Keep the key private; do not commit it, paste it into chat or place it in logs. A Linux/macOS copy should retain mode 600. No ROS installation is needed there. The tool requires numeric IPv4 addresses.
+
+## Ownership and stopping
+
+The explicitly enabled gateway starts in MANUAL ownership; its autonomous socket cannot command motors. After interface and acceptance evidence review, stop monitor and start:
+
+```bash
+./scripts/alberto.sh gateway --enable-forwarding
+```
+
+This requires a verified hardware motor interface, exact gateway hash, identity, compatible pinned parameters and all acceptance flags. It does not arm or select MANUAL. For an independently prepared **SITL** interface, use `blueboat_gateway --config PATH --interface PATH --enable-forwarding`; its `target: sitl` profile must pass the existing identity/mapping/interface checks. The five additional GCS evidence flags are required for hardware, allowing the initial GCS integration tests to be conducted in SITL. Keep SITL and hardware evidence/configuration separate; never label hardware as SITL to bypass checks.
+
+Before a grant, select MANUAL and arm through the tested operator workflow, disable QGC joystick transmission (centering a joystick is insufficient), and wait at least one second after its last control packet. Keep QGC connected and sending its genuine GCS heartbeat. Start **one** controller or calibrator, with its normal fresh software-enable heartbeat and, for PPO, desired velocity command. The node waits without motor output until granted; it must be ready to submit within 0.2 s after the grant.
+
+On the QGC computer:
+
+```text
+python3 ground_owner.py auto --gateway GATEWAY_IP:14604 --key-file /path/to/ground.key
+```
+
+Keep that process running. Each lease requires a single-use server challenge (0.25 s lifetime) and HMAC authentication, and lasts 0.5 s; the client renews every 0.1 s. The gateway separately requires a genuine QGC heartbeat within 2.5 s and a healthy FC heartbeat within 2 s, with matching UID/firmware refreshed within 15 s. Latency outside these limits causes refusal/stop; these are software deadlines, not measured physical stop times.
+
+While AUTO owns output:
+
+- Only the selected local controller session can send motor PWM; requests must be fresh within 0.1 s with increasing sequence numbers. No request for 0.2 s stops ownership. Restarted/replayed sessions and competing clients cannot resume it.
+- QGC motor/write traffic revokes AUTO and is blocked. QGC HOLD and disarm commands remain passable. Read requests continue. The deliberately narrow read allowlist may stop AUTO for other QGC command traffic; validate with the installed QGC version before marking acceptance.
+- Loss of ground grant, QGC heartbeat, FC identity/health/mode, node enable/telemetry, or controller requests stops autonomy. The node's fault latches once active.
+- The gateway sends measured input neutral, requests Rover HOLD, releases only RC1/RC3 after 0.1 s, and repeats HOLD if unconfirmed. It suppresses ground heartbeats while STOPPED until a fresh healthy FC heartbeat reports HOLD/disarmed, allowing the FC failsafe to act if stop requests are not accepted. Graceful gateway shutdown attempts neutral/HOLD/release; process death relies on FC fallback.
+
+Ctrl-C in the AUTO grant terminal requests stop; a killed/disconnected client cannot renew. A separate explicit stop command is also available:
+
+```text
+python3 ground_owner.py stop --gateway GATEWAY_IP:14604 --key-file /path/to/ground.key
+```
+
+Return to manual deliberately, **after** HOLD/disarmed feedback and release:
+
+```text
+python3 ground_owner.py manual --gateway GATEWAY_IP:14604 --key-file /path/to/ground.key
+```
+
+Then use QGC to choose the desired manual state and re-enable the joystick. A premature manual request stops AUTO and is refused until the stop state is confirmed; repeat only after inspection. The gateway never auto-arms, automatically returns to MANUAL mode, or automatically resumes AUTO after reconnect. Restart a faulted controller before a new grant. Heartbeat mode confirmation is not proof that propellers stopped; record servo/motion feedback in acceptance tests.
+
+## FC fallback and outstanding boat settings
+
+Rover 4.6.2 treats **HEARTBEAT, MANUAL_CONTROL and RC_CHANNELS_OVERRIDE** from its configured GCS system ID as GCS liveness. Therefore both removing companion/router heartbeats **and stopping autonomous override traffic on independent ground-grant loss** matter. The gateway only emits overrides while authorized, plus bounded neutral/release during stopping. Source: [GCS_Common.cpp](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/libraries/GCS_MAVLink/GCS_Common.cpp). MAVProxy normally forwards client packets without exclusive ownership: [mavproxy.py](https://github.com/ArduPilot/MAVProxy/blob/master/MAVProxy/mavproxy.py).
+
+The export remains unchanged and still needs operator review:
+
+- `RC_OVERRIDE_TIME=3` must be replaced by a **tested** positive value ≤0.5 s for this adapter. Expiry alone is not proof of neutral; measure the fallback input/output.
+- `MOT_THST_ASYM=1.6` conflicts with this independent-curve mapping's requirement of 1; paired output tests are required.
+- `FS_ACTION=4` means **SmartRTL or Hold**, which can command movement after gateway failure. This integration requires a tested Hold (`2`) or Terminate (`5`) fallback. Neither is silently written to the FC.
+- `FS_GCS_TIMEOUT=5` plus `FS_TIMEOUT=5` can leave a long interval before FC fallback when the gateway/router itself dies. Record the actual delay and choose acceptable tested settings; the 0.5 s software lease is not a guarantee for a dead gateway. GCS liveness is refreshed by the last accepted override/neutral/release too. Source: [Rover failsafe logic](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/Rover/failsafe.cpp), [parameter definitions](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/Rover/Parameters.cpp).
+- Receiver-related settings (`RC_OPTIONS=37`, `FS_THR_ENABLE=0`, no RC enable switch) are consistent with this confirmed GCS architecture and are not changed to pretend a receiver exists. Override-ignore bit 1 must remain clear.
+
+Refresh the reviewed export, capture actual identity, measure output neutrals/signs, and reconfigure/review before approving the local interface. Original PPO weights, force limits, measured-curve requirements and sensor conventions are unchanged.
+
+## Acceptance evidence
+
+Use a separate SITL instance/profile first. Record software versions, routes/startup scripts, exact config hash, packet logs, RC output and mode/time traces. Then perform the appropriate restrained hardware checks before any free-hull calibration or pool trial. Use existing manual wiring/fallback tests to establish the base interface; do not set an evidence flag simply to get past a preflight error. New flags cover:
+
+| Flag | Required evidence |
+|---|---|
+| `gcs_no_bypass_verified` | Every command route reaches the gateway; old/direct QGC, MAVROS, RC and router control paths are closed. |
+| `gcs_heartbeat_isolation_tested` | Remove ground traffic while companion remains alive; verify FC-bound heartbeats/overrides cease as designed. Include router startup/restart and signing. |
+| `gcs_handoff_tested` | Manual works; running joystick prevents grant; disable joystick and grant explicitly; joystick/control takeover stops AUTO; only HOLD/disarmed plus explicit reset returns manual; no reconnect auto-resume. |
+| `gcs_ground_loss_tested` | Stop grant client, stop QGC alone, disconnect ground network, replay/delay grants; observe actual output and elapsed time. |
+| `gcs_router_failure_tested` | Kill gateway and MAVProxy separately, stop MAVROS/controller, interrupt FC link; measure independent FC fallback and recovery without stale output. |
+
+Also test stale/replayed motor requests, simultaneous PPO/calibrator starts, delayed telemetry, mismatched UID/firmware/parameters, mode changes, and logging/CPU/network load. Retain existing interface/paired output/SITL calibration/telemetry/IMU evidence. Store evidence files and SHA in the local profile; hardware GCS flags require review of this installation's evidence, not the synthetic fixtures in `tests/`. Keep physical tests supervised and bounded.
+
+The checked-in tests exercise protocol state, authentication/replay, real localhost UDP and Unix sockets, mocked ROS node paths, and (when installed) an actual MAVProxy relay against a **fake MAVLink vehicle**. They do not validate ArduPilot mixer physics, QGC UI behavior, ROS serialization, signed FC acceptance, propellers or stopping distance. Gateway transition logs and local status live beside `gateway.json`; preserve them with acceptance evidence. A stale `.sock.lock` after a hard kill is deliberately refused: verify the old process is gone and the FC has stopped before removing that socket/lock and restarting.

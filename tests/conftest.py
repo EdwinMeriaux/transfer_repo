@@ -25,3 +25,21 @@ def calibration(tmp_path):
     path = tmp_path / 'calibration.json'
     path.write_text(json.dumps(c))
     return path
+
+
+@pytest.fixture
+def gateway_files(calibration):
+    import tempfile
+    from blueboat_ppo_controller.boat_profile import initialize, main
+    from blueboat_ppo_controller.authority import gateway_config
+    with tempfile.TemporaryDirectory(prefix='boat-',dir='/tmp') as temporary:
+        directory = Path(temporary)
+        initialize(directory/'profile')
+        directory /= 'profile'
+        main(['--directory',str(directory),'gateway-configure','--qgc-ip','127.0.0.1'])
+        profile = json.loads(calibration.read_text())
+        profile.update(control_authority='joystick_gcs', enable_rc_channel=None,
+                       gcs_gateway_file=str(directory/'gateway.json'), gcs_gateway_sha256=gateway_config(directory/'gateway.json')['config_sha256'])
+        profile['expected_parameters'].update(SYSID_MYGCS=255,SYSID_THISMAV=1,SYSID_ENFORCE=0,FS_GCS_TIMEOUT=5,FS_TIMEOUT=5,FS_ACTION=2,RC_OPTIONS=37,FS_THR_ENABLE=0)
+        calibration.write_text(json.dumps(profile))
+        yield directory, profile

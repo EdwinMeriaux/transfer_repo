@@ -21,6 +21,7 @@ from rcl_interfaces.srv import GetParameters
 
 from .mavros_interface import rc_override
 from .motor_interface import MotorInterface
+from .authority import GatewayClient
 from .thrust_calibration import PulsePlan, Recorder, RestCheck, StreamCheck
 
 
@@ -77,6 +78,7 @@ class CalibrationNode(Node):
             raise ValueError('Rest verification needs >=0.5 s, room in baseline, and <=0.1 s sample gaps')
         self.rest = RestCheck(s['rest_duration_s'], s['rest_max_gap_s'])
         self.motor = None
+        self.gateway = None
         if s['mode'] == 'powered':
             if not s['enable_powered'] or s['mass_kg'] <= 0:
                 raise ValueError('Powered mode requires enable_powered:=true and measured mass_kg >0')
@@ -132,7 +134,9 @@ class CalibrationNode(Node):
         self.events = self.run_path.with_suffix('.events.jsonl').open('x', buffering=1)
         self.run_path.with_suffix('.json').write_text(json.dumps(dict(settings=s, motor_interface=self.motor.config if self.motor else None,
             note='Effective inertial response only; no physical conventions or independent forces inferred automatically.'), indent=2, allow_nan=False)+'\n')
-        self.output = self.create_publisher(OverrideRCIn, s['rc_override_topic'], 1) if self.motor else None
+        if self.motor and self.motor.authority == 'joystick_gcs':
+            self.gateway = GatewayClient(s['interface_file'], self.motor)
+        self.output = self.create_publisher(OverrideRCIn, s['rc_override_topic'], 1) if self.motor and not self.gateway else None
         self.diagnostics = self.create_publisher(String, s['diagnostics_topic'], 10)
         self.create_subscription(Imu, s['raw_imu_topic'], self.raw_callback, qos_profile_sensor_data)
         self.create_subscription(Imu, s['attitude_topic'], self.attitude_callback, qos_profile_sensor_data)
@@ -294,7 +298,7 @@ class CalibrationNode(Node):
             self.stop('manual_takeover_or_disarmed', immediate=True)
 
     def rc_callback(self, message):
-        if self.motor:
+        if self.motor and self.motor.enable_channel is not None:
             channel = self.motor.enable_channel
             self.rc_enabled = len(message.channels) >= channel and 1800 <= message.channels[channel-1] <= 2200
             self.receipts['rc'] = time.monotonic()
@@ -350,7 +354,13 @@ class CalibrationNode(Node):
             return 'autopilot_disconnected_or_failsafe'
         if not vehicle.armed or vehicle.mode != 'MANUAL':
             return 'manual_takeover_or_disarmed'
-        for key, enabled in (('enable', self.enabled), ('rc', self.rc_enabled)):
+        checks = [('enable', self.enabled)]
+        if self.gateway:
+            if not self.gateway.granted(now):
+                return 'gcs_authority_lost'
+        else:
+            checks.append(('rc', self.rc_enabled))
+        for key, enabled in checks:
             if not enabled or not 0 <= now-self.receipts.get(key, -np.inf) <= .5:
                 return 'enable_released' if key == 'enable' else 'manual_takeover'
         if not self.vehicle_verified or not self.parameters_valid or not 0 <= now-self.receipts.get('parameters', -np.inf) <= 15.:
@@ -385,8 +395,11 @@ class CalibrationNode(Node):
         return None
 
     def publish_pwm(self, pwm):
-        if self.output is not None:
+        if self.gateway:
+            self.gateway.publish(pwm)
+        elif self.output is not None:
             self.output.publish(OverrideRCIn(channels=rc_override(self.motor.channels, pwm)))
+        if self.gateway or self.output is not None:
             self.command = None if pwm is None else list(pwm)
             self.command_time = time.monotonic()
 
@@ -395,7 +408,7 @@ class CalibrationNode(Node):
             if self.fault is None:
                 self.fault = reason
             if self.owns_output:
-                if immediate:
+                if immediate or self.gateway:
                     self.publish_pwm(None)
                     self.owns_output = False
                     self.release_at = None
@@ -467,7 +480,9 @@ class CalibrationNode(Node):
                 valid &= len(endpoints) == 1 and all(e.topic_type == typename for e in endpoints)
         override = self.get_publishers_info_by_topic(s['rc_override_topic'])
         report['override_publishers'] = [dict(node=e.node_name, namespace=e.node_namespace) for e in override]
-        if self.motor:
+        if self.gateway:
+            valid &= len(override) == 0
+        elif self.motor:
             valid &= len(override) == 1 and override[0].node_name == self.get_name() and override[0].node_namespace == self.get_namespace()
         self.graph_valid, self.graph_report = bool(valid), report
         self.receipts['graph'] = time.monotonic()
@@ -550,6 +565,8 @@ class CalibrationNode(Node):
         self.watchdog.join(timeout=1.)
         self.recorder.close()
         self.events.close()
+        if self.gateway:
+            self.gateway.close()
         self.destroy_node()
 
 

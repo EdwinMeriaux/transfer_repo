@@ -20,8 +20,10 @@
     "mass uncertainty",
     "completed takeover/failsafe/SITL/telemetry tests",
     "measured force or effective-force curves",
-    "GCS software/router, exclusive command handoff and independent ground-link loss integration"
+    "network addresses, installed GCS/router versions and completed handoff/ground-loss/router-failure tests"
   ],
   "scope": "Hardware-specific draft; not a SITL identity or measured thrust calibration",
-  "control_authority": "joystick_gcs"
+  "control_authority": "joystick_gcs",
+  "ground_station": "QGroundControl",
+  "router": "MAVProxy"
 }

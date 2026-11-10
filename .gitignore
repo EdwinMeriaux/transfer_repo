@@ -10,3 +10,8 @@ artifacts/
 *.db3
 *.mcap
 .DS_Store
+*.key
+gateway-status.json
+gateway-*.jsonl
+*.sock
+*.sock.lock
