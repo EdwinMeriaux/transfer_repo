@@ -10,6 +10,7 @@ blueboat_ppo_controller:
     odometry_topic: /mavros/local_position/odom
     imu_topic: /mavros/imu/data
     estimator_topic: /mavros/estimator_status
+    require_estimator_status: true
     state_topic: /mavros/state
     rc_input_topic: /mavros/rc/in
     rc_override_topic: /mavros/rc/override

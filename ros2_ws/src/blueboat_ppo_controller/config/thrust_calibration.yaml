@@ -13,6 +13,7 @@ blueboat_thrust_calibration:
     velocity_topic: /mavros/local_position/odom
     # Alternatives: body_twist (/velocity_body), world_twist (/velocity_local).
     velocity_type: odometry
+    require_estimator_status: true
     require_output_feedback: true
     telemetry_timeout_s: 0.2
     max_skew_s: 0.05

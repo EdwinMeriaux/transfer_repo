@@ -118,8 +118,11 @@ def calibration_node(monkeypatch, tmp_path, calibration):
         for stream in node.streams.values():
             stream.receipts = deque([now-1.1+i*.01 for i in range(111)],maxlen=2000)
         node.vehicle = S(connected=True,armed=True,mode='MANUAL',system_status=4)
-        node.enabled = node.rc_enabled = node.estimator_valid = node.vehicle_verified = node.parameters_valid = True
-        node.receipts.update({k:now for k in ('state','enable','rc','estimator','parameters')})
+        node.enabled = node.rc_enabled = node.vehicle_verified = node.parameters_valid = True
+        if node.settings['require_estimator_status']:
+            node.estimator_valid = True
+            node.receipts['estimator'] = now
+        node.receipts.update({k:now for k in ('state','enable','rc','parameters')})
         node.inspect_graph()
         return node
 
@@ -141,6 +144,13 @@ def test_default_and_dry_run_never_create_output(calibration_node, mode):
     assert node.phase == ('telemetry' if mode=='telemetry' else 'baseline')
     assert node.command is None
     assert node.diagnostics.messages
+
+
+def test_rover_telemetry_does_not_require_unsupported_estimator_status(calibration_node):
+    node = calibration_node('telemetry', require_estimator_status=False)
+    assert node.estimator_valid
+    assert 'estimator' not in node.receipts
+    assert node.permission(time.monotonic()) is None
 
 
 def test_powered_requires_explicit_startup_enable(calibration_node):

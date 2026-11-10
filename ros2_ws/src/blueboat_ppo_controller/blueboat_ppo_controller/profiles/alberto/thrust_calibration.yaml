@@ -11,6 +11,8 @@ blueboat_thrust_calibration:
     attitude_topic: /mavros/imu/data
     velocity_topic: /mavros/local_position/odom
     velocity_type: odometry
+    # ArduRover does not emit common ESTIMATOR_STATUS (230).
+    require_estimator_status: false
     require_output_feedback: true
     telemetry_timeout_s: 0.2
     max_skew_s: 0.05

@@ -67,11 +67,10 @@ ros2 service list -t
 ros2 topic echo /mavros/state --once
 ros2 topic echo /mavros/local_position/odom --once
 ros2 topic echo /mavros/imu/data --once
-ros2 topic echo /mavros/estimator_status --once
 ros2 topic hz /mavros/local_position/odom
 ```
 
-Check IMU rate similarly. Verify measured body-frame velocity, positive yaw convention, timestamps and estimator flags using known simulated motions. The adapter expects ENU/FLU, map/base_link, and every velocity component. Frame names alone do not prove the values have the correct convention. Aim for ≥50 Hz fresh motion measurements; never relabel or zero missing fields just to clear a check.
+Check IMU rate similarly. Verify measured body-frame velocity, positive yaw convention and timestamps using known simulated motions. The adapter expects ENU/FLU, map/base_link, and every velocity component. Frame names alone do not prove the values have the correct convention. Aim for ≥50 Hz fresh motion measurements; never relabel or zero missing fields just to clear a check. ArduRover does not emit common `ESTIMATOR_STATUS` (230), so a zero-count `/mavros/estimator_status` is expected and Alberto's profile explicitly relies on the validated state + IMU/odometry path instead.
 
 ```bash
 mkdir -p ~/gazebo_blue_boat/artifacts/config
@@ -115,7 +114,7 @@ mkdir -p ~/gazebo_blue_boat/artifacts/bags
 ros2 bag record -o ~/gazebo_blue_boat/artifacts/bags/first-shadow \
   /blueboat/cmd_vel /blueboat/enable /blueboat/observation \
   /blueboat/requested_forces /blueboat/diagnostics \
-  /mavros/local_position/odom /mavros/imu/data /mavros/estimator_status \
+  /mavros/local_position/odom /mavros/imu/data \
   /mavros/state /mavros/rc/in /mavros/rc/out /mavros/rc/override
 ```
 

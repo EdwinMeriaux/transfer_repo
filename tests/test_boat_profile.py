@@ -94,6 +94,9 @@ def test_mass_and_measurement_command_updates_only_local_config(bundle):
     assert not p['verified'] and not any(p[k] for k in CHECKS)
     settings=yaml.safe_load((bundle/'thrust_calibration.yaml').read_text())['blueboat_thrust_calibration']['ros__parameters']
     assert settings['mass_kg']==24.5 and settings['mode']=='dry_run' and not settings['enable_powered']
+    assert settings['require_estimator_status'] is False
+    controller=yaml.safe_load((bundle/'controller.yaml').read_text())['blueboat_ppo_controller']['ros__parameters']
+    assert controller['require_estimator_status'] is False
     assert json.loads((bundle/'boat.json').read_text())['mass_kg']==24.5
     assert json.loads((bundle/'analysis.json').read_text())['imu_offset_flu_m']==[.1,0,.2]
 

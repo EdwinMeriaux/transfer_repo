@@ -40,7 +40,7 @@ class CalibrationNode(Node):
             raw_imu_topic='/mavros/imu/data_raw', attitude_topic='/mavros/imu/data',
             velocity_topic='/mavros/local_position/odom', velocity_type='odometry',
             output_topic='/mavros/rc/out', state_topic='/mavros/state', rc_input_topic='/mavros/rc/in',
-            estimator_topic='/mavros/estimator_status', rc_override_topic='/mavros/rc/override',
+            estimator_topic='/mavros/estimator_status', require_estimator_status=True, rc_override_topic='/mavros/rc/override',
             enable_topic='/blueboat/calibration/enable', diagnostics_topic='/blueboat/calibration/status',
             vehicle_info_service='/mavros/vehicle_info_get', param_pull_service='/mavros/param/pull',
             param_get_service='/mavros/param/get_parameters', telemetry_timeout_s=.2, max_skew_s=.05,
@@ -111,7 +111,8 @@ class CalibrationNode(Node):
         self.streams = {key: StreamCheck(s['telemetry_timeout_s'], s['max_gap_s']) for key in ('raw', 'attitude', 'velocity', 'output')}
         self.latest, self.receipts = {}, {}
         self.vehicle = None
-        self.enabled = self.rc_enabled = self.estimator_valid = False
+        self.enabled = self.rc_enabled = False
+        self.estimator_valid = not s['require_estimator_status']
         self.parameters_valid = self.vehicle_verified = self.param_pending = False
         self.graph_valid = False
         self.graph_report = {}
@@ -141,7 +142,8 @@ class CalibrationNode(Node):
         self.create_subscription(RCOut, s['output_topic'], self.output_callback, qos_profile_sensor_data)
         self.create_subscription(State, s['state_topic'], self.state_callback, 10)
         self.create_subscription(RCIn, s['rc_input_topic'], self.rc_callback, qos_profile_sensor_data)
-        self.create_subscription(EstimatorStatus, s['estimator_topic'], self.estimator_callback, qos_profile_sensor_data)
+        if s['require_estimator_status']:
+            self.create_subscription(EstimatorStatus, s['estimator_topic'], self.estimator_callback, qos_profile_sensor_data)
         self.create_subscription(Bool, s['enable_topic'], self.enable_callback, 1)
         self.vehicle_client = self.create_client(VehicleInfoGet, s['vehicle_info_service'])
         self.pull_client = self.create_client(ParamPull, s['param_pull_service'])
@@ -358,7 +360,8 @@ class CalibrationNode(Node):
                 return 'enable_released' if key == 'enable' else 'manual_takeover'
         if not self.vehicle_verified or not self.parameters_valid or not 0 <= now-self.receipts.get('parameters', -np.inf) <= 15.:
             return 'vehicle_or_parameters_unverified'
-        if not self.estimator_valid or not 0 <= now-self.receipts.get('estimator', -np.inf) <= 2.:
+        if (self.settings['require_estimator_status']
+                and (not self.estimator_valid or not 0 <= now-self.receipts.get('estimator', -np.inf) <= 2.)):
             return 'estimator_invalid_or_stale'
         if self.settings['require_output_feedback']:
             report = self.streams['output'].report(now, self.ros_now())
@@ -489,7 +492,9 @@ class CalibrationNode(Node):
             data['vehicle'] = {k:getattr(self.vehicle,k) for k in ('connected','armed','mode','system_status')} if self.vehicle else None
             data['gates'] = dict(software_enable=self.enabled, receiver_enable=self.rc_enabled,
                                  identity_verified=self.vehicle_verified, parameters_verified=self.parameters_valid,
-                                 estimator_valid=self.estimator_valid, owns_output=self.owns_output)
+                                 estimator_valid=self.estimator_valid,
+                                 estimator_health_source=('estimator_status' if self.settings['require_estimator_status'] else 'validated_imu_odometry'),
+                                 owns_output=self.owns_output)
             data['rest_elapsed_s'] = max(0., now-self.rest.since) if self.rest.since is not None else 0.
             data['rest_verified'] = self.rest.ready(now)
             times = [stamp(self.latest[k]) for k in ('raw', 'attitude', 'velocity') if k in self.latest]

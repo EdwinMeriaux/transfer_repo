@@ -13,7 +13,7 @@ The separate `thrust_calibration` executable and offline `calibration_analyze` /
 | `/mavros/local_position/odom` | `nav_msgs/msg/Odometry` | `map` pose frame, `base_link` twist; all three body linear components. |
 | `/mavros/imu/data` | `sensor_msgs/msg/Imu` | `base_link`, quaternion and all three angular rates; known-valid measurements. |
 | `/mavros/state` | `mavros_msgs/msg/State` | Connected and system status standby/active, receipt ≤2 s. Actuator requires armed MANUAL. |
-| `/mavros/estimator_status` | `mavros_msgs/msg/EstimatorStatus` | Valid attitude and horizontal/vertical velocity, no glitch/error/fallback; receipt ≤2 s. |
+| `/mavros/estimator_status` | `mavros_msgs/msg/EstimatorStatus` | Required by default for autopilots that publish common MAVLink `ESTIMATOR_STATUS` (230). Explicitly disabled in Alberto's ArduRover profile because Rover does not emit message 230; the state and strict IMU/odometry source checks remain required. |
 | `/mavros/rc/in` | `mavros_msgs/msg/RCIn` | `rc_receiver` authority only: separate receiver enable switch high (1800–2200), receipt ≤0.5 s. Not an enable gate for `direct_mavros`. |
 
 Motion subscriptions use sensor-data QoS (best effort, volatile); command and enable use reliable depth 1. Publisher QoS compatibility must be checked in the actual ROS graph. No `/clock` source is provided. Use simulation time only if MAVROS timestamps and Gazebo's bridged clock share the same time base. Pausing simulation makes monotonic freshness expire and stops actuation.

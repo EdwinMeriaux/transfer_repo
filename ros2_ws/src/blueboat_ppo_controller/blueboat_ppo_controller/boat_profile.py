@@ -236,6 +236,12 @@ def main(args=None):
             boat = json.loads((directory/'boat.json').read_text())
             analysis = json.loads((directory/'analysis.json').read_text())
             config = yaml.safe_load((directory/'thrust_calibration.yaml').read_text())
+            controller = yaml.safe_load((directory/'controller.yaml').read_text())
+            # Alberto runs ArduRover. Rover emits EKF_STATUS_REPORT (193), not
+            # common ESTIMATOR_STATUS (230), so its health contract is the
+            # validated state + timestamped IMU/odometry path instead.
+            controller['blueboat_ppo_controller']['ros__parameters']['require_estimator_status'] = False
+            config['blueboat_thrust_calibration']['ros__parameters']['require_estimator_status'] = False
             if parsed.control_authority is not None:
                 profile['control_authority'] = parsed.control_authority
                 boat['control_authority'] = parsed.control_authority
@@ -276,6 +282,7 @@ def main(args=None):
             profile.update(verified=False, **{key:False for key in CHECKS})
             for name, value in [('motor_interface.json',profile),('boat.json',boat),('analysis.json',analysis)]:
                 write_json(directory/name, value)
+            (directory/'controller.yaml').write_text(yaml.safe_dump(controller, sort_keys=False))
             (directory/'thrust_calibration.yaml').write_text(yaml.safe_dump(config, sort_keys=False))
             print('Local measurements updated; interface approval/tests reset. No FC parameter changed.')
         elif parsed.operation == 'capture':

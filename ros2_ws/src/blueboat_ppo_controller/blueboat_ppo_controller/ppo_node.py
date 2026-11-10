@@ -30,7 +30,8 @@ class PPONode(Node):
         super().__init__('blueboat_ppo_controller')
         defaults = dict(mode='shadow', enable_actuators=False, deployment_target='sitl', calibration_file='', model_directory='',
             command_topic='/blueboat/cmd_vel', enable_topic='/blueboat/enable', odometry_topic='/mavros/local_position/odom', imu_topic='/mavros/imu/data',
-            state_topic='/mavros/state', rc_input_topic='/mavros/rc/in', estimator_topic='/mavros/estimator_status', rc_override_topic='/mavros/rc/override',
+            state_topic='/mavros/state', rc_input_topic='/mavros/rc/in', estimator_topic='/mavros/estimator_status', require_estimator_status=True,
+            rc_override_topic='/mavros/rc/override',
             vehicle_info_service='/mavros/vehicle_info_get', param_pull_service='/mavros/param/pull', param_get_service='/mavros/param/get_parameters',
             forces_topic='/blueboat/requested_forces', diagnostics_topic='/blueboat/diagnostics', observation_topic='/blueboat/observation',
             world_frame='map', body_frame='base_link', telemetry_timeout_s=.2, command_timeout_s=.5, watchdog_timeout_s=.1, log_directory='')
@@ -52,7 +53,8 @@ class PPONode(Node):
         self.odom = self.imu = self.vehicle = None
         self.command = np.zeros(2)
         self.previous_action = np.zeros(2)
-        self.enabled = self.rc_enabled = self.parameters_valid = self.estimator_valid = False
+        self.enabled = self.rc_enabled = self.parameters_valid = False
+        self.estimator_valid = not self.settings['require_estimator_status']
         self.param_pending = False
         self.vehicle_verified = False
         self.owns_output = False
@@ -71,7 +73,8 @@ class PPONode(Node):
         self.create_subscription(Imu, self.settings['imu_topic'], self.imu_callback, qos_profile_sensor_data)
         self.create_subscription(State, self.settings['state_topic'], self.state_callback, 10)
         self.create_subscription(RCIn, self.settings['rc_input_topic'], self.rc_callback, qos_profile_sensor_data)
-        self.create_subscription(EstimatorStatus, self.settings['estimator_topic'], self.estimator_callback, qos_profile_sensor_data)
+        if self.settings['require_estimator_status']:
+            self.create_subscription(EstimatorStatus, self.settings['estimator_topic'], self.estimator_callback, qos_profile_sensor_data)
         self.vehicle_client = self.create_client(VehicleInfoGet, self.settings['vehicle_info_service'])
         self.pull_client = self.create_client(ParamPull, self.settings['param_pull_service'])
         self.get_client = self.create_client(GetParameters, self.settings['param_get_service'])
@@ -221,7 +224,8 @@ class PPONode(Node):
         ros_now = self.get_clock().now().nanoseconds / 1e9
         if any(not 0 <= ros_now - self.stamps[name] <= self.gate.telemetry_timeout for name in ('imu', 'odometry')):
             return 'source_telemetry_stale'
-        if not self.estimator_valid or not 0 <= now - self.receipts.get('estimator', -np.inf) <= 2.:
+        if (self.settings['require_estimator_status']
+                and (not self.estimator_valid or not 0 <= now - self.receipts.get('estimator', -np.inf) <= 2.)):
             return 'estimator_invalid_or_stale'
         if abs(self.stamps['imu'] - self.stamps['odometry']) > .1:
             return 'telemetry_time_skew'

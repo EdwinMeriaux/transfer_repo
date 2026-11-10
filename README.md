@@ -90,6 +90,8 @@ ros2 topic pub --rate 10 /blueboat/cmd_vel geometry_msgs/msg/Twist \
 
 These are raw normalized control requests interpreted by the PPO/controller path; they are not ArduPilot position, heading, or depth setpoints.
 
+ArduRover does not emit common MAVLink `ESTIMATOR_STATUS` (message 230). Alberto's profile therefore does not wait on the empty MAVROS `/mavros/estimator_status` topic; it retains the connected/healthy flight-controller state, exact frame, advancing source timestamp, freshness, skew, finite-value, quaternion, IMU and odometry checks. Generic non-Rover profiles still require estimator status by default.
+
 ## Restrained PWM wiring test
 
 Only use this with propulsion physically restrained or otherwise made safe, QGC joystick output stopped, exactly one ROS publisher on `/mavros/rc/override`, and an operator ready for manual recovery:

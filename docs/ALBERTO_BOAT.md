@@ -70,13 +70,15 @@ The actuator and reviewed powered calibration publish `mavros_msgs/msg/OverrideR
 - exactly one ROS override publisher;
 - armed MANUAL state;
 - fresh explicit software enable heartbeat;
-- fresh command, odometry, IMU and estimator streams;
+- fresh command, odometry and IMU streams with advancing, aligned source timestamps and exact frames;
 - matching sysid, compid, exact firmware, vehicle type and parameter pins;
 - reviewed motor mapping and accepted evidence;
 - bounded force/PWM, rate, tilt, feedback and watchdog checks;
 - configured flight-controller command-loss fallback.
 
 Neither capture nor the controller arms or changes flight mode. A software heartbeat does not make unresolved physical configuration safe.
+
+ArduRover publishes `EKF_STATUS_REPORT` (193) and [documents common `ESTIMATOR_STATUS` (230) as unsupported](https://ardupilot.org/rover/docs/Rover_MAVLink_Messages.html); message 230 is the source of MAVROS `/mavros/estimator_status`. The Alberto profile explicitly uses `require_estimator_status: false`; this removes only that impossible topic dependency. Connected/healthy FC state and the live IMU/odometry validity, frame, timestamp, rate, skew and limit gates remain mandatory. Generic profiles default to requiring estimator status.
 
 ## Current blockers
 

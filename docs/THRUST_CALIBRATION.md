@@ -113,7 +113,7 @@ ros2 bag record -o ~/gazebo_blue_boat/artifacts/calibration/telemetry-bag \
   /mavros/rc/override /blueboat/calibration/enable /blueboat/calibration/status
 ```
 
-Use a new bag directory per run; substitute configured topic names, add `/clock` when appropriate. Preserve CSV, both sidecars, bag, firmware/plugin versions, parameter dump, battery conditions, payload and weather/current notes together.
+Use a new bag directory per run; substitute configured topic names, add `/clock` when appropriate. Alberto's ArduRover bags are expected to show zero messages on `/mavros/estimator_status`; the explicit profile fallback is documented below and does not affect the other recorded streams. Preserve CSV, both sidecars, bag, firmware/plugin versions, parameter dump, battery conditions, payload and weather/current notes together.
 
 ## Establish a verified motor interface before powered calibration
 
@@ -184,7 +184,7 @@ Launch defaults override copied YAML to dry-run/disabled/SITL unless explicitly 
 ros2 topic pub --rate 10 /blueboat/calibration/enable std_msgs/msg/Bool '{data: true}'
 ```
 
-This software heartbeat expires after 0.5 s. Before each pulse the node requires near-rest velocity/rate and a plausible gravity-corrected baseline. Speed, angular rate, tilt, source timing, graph, estimator, state, parameters and actual outputs are checked continuously. Faults latch until deliberate restart; the independent monotonic watchdog attempts neutral then release. Manual takeover/disarming/enable release hands authority back immediately. A completed plan releases and cannot start again. Stop the true heartbeat publisher before sending a one-shot false; then follow the tested receiver takeover/disarm workflow:
+This software heartbeat expires after 0.5 s. Before each pulse the node requires near-rest velocity/rate and a plausible gravity-corrected baseline. Speed, angular rate, tilt, source timing, graph, state, parameters and actual outputs are checked continuously. Profiles for autopilots that publish common `ESTIMATOR_STATUS` also require that stream. ArduRover documents message 230 as unsupported, so Alberto's explicit fallback retains connected/healthy FC state plus strict IMU/odometry frame, timestamp, freshness, rate and skew validation. Faults latch until deliberate restart; the independent monotonic watchdog attempts neutral then release. Manual takeover/disarming/enable release hands authority back immediately. A completed plan releases and cannot start again. Stop the true heartbeat publisher before sending a one-shot false; then follow the tested receiver takeover/disarm workflow:
 
 ```bash
 ros2 topic pub --once /blueboat/calibration/enable std_msgs/msg/Bool '{data: false}'

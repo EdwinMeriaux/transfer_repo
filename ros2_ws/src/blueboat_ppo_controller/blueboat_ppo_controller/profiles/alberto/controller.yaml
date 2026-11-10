@@ -10,6 +10,9 @@ blueboat_ppo_controller:
     odometry_topic: /mavros/local_position/odom
     imu_topic: /mavros/imu/data
     estimator_topic: /mavros/estimator_status
+    # ArduRover emits EKF_STATUS_REPORT (193), which MAVROS does not map here;
+    # retain strict state, frame, timestamp and IMU/odometry freshness checks.
+    require_estimator_status: false
     state_topic: /mavros/state
     rc_input_topic: /mavros/rc/in
     rc_override_topic: /mavros/rc/override

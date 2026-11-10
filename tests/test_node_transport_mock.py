@@ -79,8 +79,8 @@ def node_factory(monkeypatch, tmp_path, calibration):
         monkeypatch.setitem(sys.modules, name, module)
     sys.modules.pop('blueboat_ppo_controller.ppo_node', None)
     module = importlib.import_module('blueboat_ppo_controller.ppo_node')
-    def factory(mode='shadow'):
-        settings.update(mode=mode, enable_actuators=mode=='actuator', calibration_file=str(calibration))
+    def factory(mode='shadow', **overrides):
+        settings.update(mode=mode, enable_actuators=mode=='actuator', calibration_file=str(calibration), **overrides)
         node = module.PPONode()
         nodes.append(node)
         timestamp = time.time_ns()
@@ -90,7 +90,8 @@ def node_factory(monkeypatch, tmp_path, calibration):
         node.imu_callback(S(header=header,orientation=S(x=0.,y=0.,z=0.,w=1.),angular_velocity=vector,orientation_covariance=[0]*9,angular_velocity_covariance=[0]*9))
         node.command_callback(S(linear=S(x=.4,y=0.,z=0.),angular=S(x=0.,y=0.,z=.2)))
         node.state_callback(S(connected=True,armed=mode=='actuator',mode='MANUAL' if mode=='actuator' else 'HOLD',system_status=4))
-        node.estimator_callback(S(attitude_status_flag=True,velocity_horiz_status_flag=True,velocity_vert_status_flag=True,const_pos_mode_status_flag=False,gps_glitch_status_flag=False,accel_error_status_flag=False))
+        if node.settings['require_estimator_status']:
+            node.estimator_callback(S(attitude_status_flag=True,velocity_horiz_status_flag=True,velocity_vert_status_flag=True,const_pos_mode_status_flag=False,gps_glitch_status_flag=False,accel_error_status_flag=False))
         node.enabled = node.rc_enabled = node.parameters_valid = node.vehicle_verified = True
         node.receipts.update({key:time.monotonic() for key in ['enable','rc','parameters']})
         return node
@@ -116,6 +117,13 @@ def test_full_shadow_loop_never_creates_actuator_publisher(node_factory):
     np.testing.assert_allclose(np.array(obs)[[53,108]], previous / 10, atol=1e-7)
     node.close()
     assert node.gate.closed and not node.watchdog.is_alive()
+
+
+def test_rover_shadow_uses_validated_sources_without_unsupported_estimator_status(node_factory):
+    node = node_factory(require_estimator_status=False)
+    assert 'estimator' not in node.receipts
+    node.control()
+    assert len(node.forces.messages) == len(node.observations.messages) == 1
 
 
 def test_actuator_timeout_neutral_release_and_latch(node_factory):
