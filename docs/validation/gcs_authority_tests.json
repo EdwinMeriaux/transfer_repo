@@ -1,0 +1,21 @@
+{
+  "client_date": "2026-11-09",
+  "baseline_commit": "2d009af",
+  "confirmed_manual_control_source": "joystick_gcs",
+  "gcs_client_and_router_known": false,
+  "gcs_command_arbitration_implemented": false,
+  "powered_gcs_operation_enabled": false,
+  "pytest": {"passed": 113, "skipped": 4, "skip_reason": "Three opt-in live SITL tests and real ROS serialization unavailable locally"},
+  "checks": [
+    "Explicit joystick_gcs authority blocks powered MotorInterface even with approval flags true",
+    "Receiver authority and all existing receiver-mode tests remain supported",
+    "Unknown authority values rejected",
+    "Existing local profile migration preserves parameters and invalidates approval",
+    "Parameter reimport preserves confirmed GCS authority and does not invent a receiver enable switch",
+    "Telemetry, dry-run and shadow launch commands remain non-actuating",
+    "Rover-4.6.2 source review identifies shared authorized system ID and GCS heartbeat masking risk"
+  ],
+  "not_executed": ["Live GCS/router integration", "ROS/Jetson runtime", "SITL powered acceptance", "Physical boat tests"],
+  "flight_controller_settings_changed": false,
+  "policy_changed": false
+}

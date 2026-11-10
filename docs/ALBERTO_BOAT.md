@@ -1,8 +1,8 @@
 # Alberto's BlueBoat: prefilled hardware bundle and field commands
 
-This is the short path for the actual boat described on **2026-11-09**. All local configuration files are kept together; no repeated copying of individual fields from the parameter export is needed. It builds on the existing [setup guide](ALBERTO_SETUP.md) and [effective thrust calibration procedure](THRUST_CALIBRATION.md).
+This is the short path for the actual boat described on **2026-11-09**. Manual control is now confirmed as **joystick + GCS**; see [the required GCS handoff integration](GCS_HANDOFF.md). All local configuration files are kept together; no repeated copying of individual fields from the parameter export is needed. It builds on the existing [setup guide](ALBERTO_SETUP.md) and [effective thrust calibration procedure](THRUST_CALIBRATION.md).
 
-**Available now:** install, offline inference, telemetry recording, dry-run, shadow, read-only identity/parameter capture, command-line mass/measurement updates, and analysis using recorded session mass. **Powered calibration/PPO remain blocked** until the current vehicle settings and missing measurements/tests are resolved. The export is not a thrust calibration or a record of completed safety tests. No command in this workflow changes flight-controller parameters, mode or arming.
+**Available now:** install, offline inference, telemetry recording, dry-run, shadow, read-only identity/parameter capture, command-line mass/measurement updates, and analysis using recorded session mass. **Powered calibration/PPO remain blocked** because joystick/GCS command arbitration and independent ground-link loss handling are not implemented, in addition to the remaining mapping/measurement/tests. Marking verification flags true cannot enable this unsupported authority. The export is not a thrust calibration or a record of completed safety tests. No command in this workflow changes flight-controller parameters, mode or arming.
 
 ## Exactly what was populated
 
@@ -31,7 +31,7 @@ The actual deployment package remains [`ros2_ws/src/blueboat_ppo_controller/`](.
 |---|---|
 | `boat.json` | 23 kg reported mass, provenance and outstanding measurements |
 | `observed_parameters.json` | Relevant actual exported values, unchanged; not an FC parameter-upload file |
-| `motor_interface.json` | Correct input/output routing and RC neutral; hardware identity, output measurements, evidence and approvals remain pending |
+| `motor_interface.json` | Correct routing/RC neutral and confirmed `joystick_gcs` authority; handoff integration, identity, output measurements and evidence remain pending |
 | `thrust_calibration.yaml` | 23 kg, default dry-run, original bounded pulse plan and telemetry limits |
 | `controller.yaml` | Default PPO shadow mode, exact bundled model |
 | `analysis.json` | Analysis options; mass uncertainty and COM→IMU offset must be supplied, not guessed |
@@ -52,6 +52,8 @@ sudo apt-get install python3-venv python3-pip python3-colcon-common-extensions
 ```
 
 For an existing checkout, first save your work and `git pull --ff-only` on main, then run the installer. It creates a venv, installs inference/analysis dependencies, links the package into `~/blueboat_ws/src`, builds with colcon, runs offline inference and initializes the local bundle. An existing different package is refused; existing local configuration is preserved. It does not launch powered control. A custom workspace can be supplied as the install script's first argument; set `BLUEBOAT_WORKSPACE=/your/workspace` when using the wrapper afterward.
+
+For an existing local bundle created before the joystick/GCS confirmation, run `./scripts/alberto.sh configure --control-authority joystick_gcs` once after reinstalling. This preserves the exported settings and clears stale approvals.
 
 The wrapper sources Humble, the venv and the workspace automatically in each terminal. From the repository root:
 
@@ -117,14 +119,14 @@ These are findings, **not commands to apply blindly**. The software preserves ev
 
 | Exported value | Why it blocks this integration / required review |
 |---|---|
-| `RC_OPTIONS=37` | Bits 0 and 2 ignore the physical receiver and receiver failsafe flags. This conflicts with the existing receiver takeover design. Clarify whether takeover is physical RC or joystick/GCS over MAVLink; the latter needs a separately designed/tested authority path, not a bypass flag. |
-| All `RCn_OPTION=0` | No separate override-enable switch (`46`) is configured. Choose an actual available receiver channel, distinct from RC1/RC3 and mode channel 8, then test it. No channel is fabricated in this profile. |
+| `RC_OPTIONS=37` | Bits 0 and 2 ignore the physical receiver/failsafe flags. This is consistent with the confirmed joystick/GCS architecture; retain the observed value. It requires a GCS command-arbitration and ground-link-loss integration, which is currently unimplemented. |
+| All `RCn_OPTION=0` | No physical receiver-enable switch is claimed or requested for this GCS setup. The local `enable_rc_channel` stays null. |
 | `RC_OVERRIDE_TIME=3` | Existing controller requires a tested positive timeout ≤0.5 s. Measure real fallback behavior after companion/network failure. |
-| `FS_THR_ENABLE=0` | Receiver failsafe is disabled; the existing guard requires it enabled and tested. |
+| `FS_THR_ENABLE=0` | Retained for this receiver-less setup. The pending GCS path needs independently verified ground/companion-link loss handling; enabling a nonexistent receiver failsafe is not a substitute. |
 | `MOT_THST_ASYM=1.6` | The independent per-motor curve adapter currently requires 1. The mixer can couple commands; review/validate this mapping or implement a characterized coupled mapping before powered use. Do not just bypass the check. |
 | `SERVO1/3_TRIM=1510`, `SERVO3_REVERSED=1` | Preserve them and measure actual neutral/sign separately from the reported input-neutral 1500. |
 
-`FS_GCS_ENABLE=2`, GCS/receiver timing/actions, motor slew 200, steering/throttle mix 0.6, and mode channel 8 are retained for matching and review. Their presence is not proof that fallback behavior has been tested. The added runtime check rejects ignored receiver/failsafe bits even if someone manually changes `verified` to true. Source for those bits: [Rover 4.6.2 RC options](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/libraries/RC_Channel/RC_Channel.h); [failsafe parameters](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/Rover/Parameters.cpp).
+`FS_GCS_ENABLE=2`, GCS/receiver timing/actions, motor slew 200, steering/throttle mix 0.6, and mode channel 8 are retained for matching and review. Their presence is not proof that fallback behavior has been tested. The receiver-based implementation still rejects ignored receiver/failsafe bits. Alberto’s separate `joystick_gcs` authority is explicitly rejected as unimplemented even if someone changes `verified` to true. Source for those bits: [Rover 4.6.2 RC options](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/libraries/RC_Channel/RC_Channel.h); [failsafe parameters](https://github.com/ArduPilot/ardupilot/blob/Rover-4.6.2/Rover/Parameters.cpp).
 
 After the operator deliberately changes and tests vehicle parameters, export them again, then import the export with one command:
 
@@ -144,23 +146,22 @@ Use `configure` options rather than copying fields between files:
 ./scripts/alberto.sh configure --mass-kg MEASURED_TOTAL_KG --mass-std-kg UNCERTAINTY_KG \
   --imu-offset X_METRES Y_METRES Z_METRES \
   --left-servo-neutral MEASURED_PWM --right-servo-neutral MEASURED_PWM \
-  --left-servo-forward-sign SIGN --right-servo-forward-sign SIGN \
-  --enable-rc-channel VERIFIED_CHANNEL
+  --left-servo-forward-sign SIGN --right-servo-forward-sign SIGN
 ```
 
-Replace uppercase tokens with actual values; signs are `1` or `-1`. COM→IMU is in body FLU metres. A physically reversed left motor may have a negative servo PWM sign even though its RC input forward sign is positive; confirm both. Supplying a channel does not set its FC auxiliary option, and supplying measurements does not approve the interface.
+Replace uppercase tokens with actual values; signs are `1` or `-1`. COM→IMU is in body FLU metres. A physically reversed left motor may have a negative servo PWM sign even though its RC input forward sign is positive; confirm both. Supplying measurements does not approve the interface. A receiver-enable channel is not a replacement for GCS handoff; the CLI rejects that option for this authority.
 
-The only remaining manual review file is the local `motor_interface.json`: provide the actual evidence path and SHA, and mark only tests actually completed. Existing requirements include interface direction/neutral/paired-output tests, telemetry and IMU placement, manual takeover/receiver/GCS/override timeout tests, SITL control and SITL calibration acceptance, and restrained control tests. Set `verified` only after review. [The full calibration guide](THRUST_CALIBRATION.md) defines those tests. No executable here auto-approves them.
+The only remaining manual review file is the local `motor_interface.json`: provide the actual evidence path and SHA, and mark only tests actually completed. Existing requirements include interface direction/neutral/paired-output tests, telemetry and IMU placement, manual takeover/receiver/GCS/override timeout tests, SITL control and SITL calibration acceptance, and restrained control tests. Set `verified` only after review; this does not implement or unlock the pending GCS authority path. [The full calibration guide](THRUST_CALIBRATION.md) defines those tests. No executable here auto-approves them.
 
-## Powered collection and analysis after those checks
+## Powered collection and analysis — reference for the future GCS integration
 
-These commands intentionally fail with the shipped profile. They are supplied so no extra field editing is needed after a verified interface exists:
+These commands intentionally fail for `joystick_gcs`, even with a manually verified interface. They document the downstream calibration flow; use requires an implemented and tested GCS handoff first:
 
 ```bash
 ./scripts/alberto.sh run powered --enable-actuators
 ```
 
-The operator selects MANUAL and arms through the existing tested workflow, enables the separate receiver switch, and starts the explicit software heartbeat in another ROS-sourced terminal only when ready:
+The operator selects MANUAL and arms through the existing tested workflow, completes the future integrated GCS ownership handoff, and starts the explicit software heartbeat in another ROS-sourced terminal only when ready:
 
 ```bash
 ros2 topic pub --rate 10 /blueboat/calibration/enable std_msgs/msg/Bool '{data: true}'
@@ -184,11 +185,11 @@ After independent review of a sufficiently covered measured mapping, PPO actuati
   --calibration /absolute/path/to/reviewed-ppo-calibration.json
 ```
 
-The normal PPO enable heartbeat `/blueboat/enable`, fresh desired Twist, valid live telemetry, identity/parameters, receiver enable and armed MANUAL gates still apply. See [ALBERTO_SETUP.md](ALBERTO_SETUP.md) for that sequence. The trained model, observation layout, action scaling and force envelope have not changed.
+The normal PPO enable heartbeat `/blueboat/enable`, fresh desired Twist, valid live telemetry, identity/parameters and armed MANUAL gates still apply alongside the future GCS ownership interlock. A local heartbeat alone cannot authorize GCS handoff. See [ALBERTO_SETUP.md](ALBERTO_SETUP.md) for that sequence. The trained model, observation layout, action scaling and force envelope have not changed.
 
 ## Stop
 
-Use the tested physical takeover procedure first. Stop the true software heartbeat publisher, then send false on the active mode's enable topic:
+Use the operator’s tested GCS stop/takeover procedure first; no powered GCS path has been enabled by this update. Stop the true software heartbeat publisher, then send false on the active mode's enable topic:
 
 ```bash
 ros2 topic pub --once /blueboat/calibration/enable std_msgs/msg/Bool '{data: false}'
@@ -196,4 +197,4 @@ ros2 topic pub --once /blueboat/calibration/enable std_msgs/msg/Bool '{data: fal
 ros2 topic pub --once /blueboat/enable std_msgs/msg/Bool '{data: false}'
 ```
 
-Stop the node and bag with Ctrl+C, and verify actual neutral/authority through the operator workflow. Release returns control to the configured receiver/FC; it is not guaranteed braking. Process/network failures rely on tested independent FC fallback. Linux/Jetson installation, live MAVROS capture, SITL and physical execution of this new convenience workflow remain untested here; local software validation is recorded separately.
+Stop the node and bag with Ctrl+C, and verify actual neutral/authority through the operator workflow. Release behavior depends on the GCS/FC command path; it is not guaranteed braking. Process/network failures rely on tested independent FC fallback. Linux/Jetson installation, live MAVROS capture, SITL and physical execution of this new convenience workflow remain untested here; local software validation is recorded separately.

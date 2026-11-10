@@ -106,5 +106,6 @@
   "telemetry_conventions_verified": false,
   "imu_placement_verified": false,
   "sitl_calibration_test_passed": false,
-  "output_feedback_unavailable_accepted": false
+  "output_feedback_unavailable_accepted": false,
+  "control_authority": "joystick_gcs"
 }

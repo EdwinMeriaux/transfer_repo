@@ -31,7 +31,7 @@ def test_export_mapping_input_output_and_no_assumed_servo_neutral(bundle):
         assert p[side]['servo_neutral_pwm'] is None and p[side]['servo_forward_pwm_sign'] is None
     message = rc_override([p[s]['rc_channel'] for s in ('left','right')], [1540,1500])
     assert message[:3] == [1540,65535,1500]
-    with pytest.raises(ValueError, match='verified'):
+    with pytest.raises(ValueError, match='Joystick/GCS'):
         MotorInterface(bundle/'motor_interface.json','hardware')
 
 
@@ -40,9 +40,11 @@ def test_bundle_preserves_settings_and_reports_every_known_conflict(bundle):
     assert p['expected_parameters'] == json.loads((BUNDLE/'observed_parameters.json').read_text())
     result = report(bundle)
     assert not result['powered_ready'] and result['mass_kg'] == 23
-    for conflict in ('MOT_THST_ASYM=1.6','RC_OVERRIDE_TIME=3','FS_THR_ENABLE=0','RC_OPTIONS=37','RCn_OPTION=46'):
+    for conflict in ('MOT_THST_ASYM=1.6','RC_OVERRIDE_TIME=3','Joystick/GCS takeover confirmed'):
         assert any(conflict in message for message in result['blockers'])
     assert p['enable_rc_channel'] is None
+    assert p['control_authority'] == 'joystick_gcs'
+    assert not any('receiver failsafe is disabled' in message or 'RCn_OPTION=46' in message for message in result['blockers'])
     assert all(p[key] is False for key in CHECKS)
 
 
@@ -67,7 +69,8 @@ def test_real_parameter_subset_can_be_reimported_and_preserves_evidence(tmp_path
     old=(bundle/'motor_interface.json').read_text()
     main(['--directory',str(bundle),'refresh','--params',str(file)])
     p=json.loads((bundle/'motor_interface.json').read_text())
-    assert p['expected_parameters']==values and p['enable_rc_channel']==7
+    assert p['expected_parameters']==values and p['enable_rc_channel'] is None
+    assert p['control_authority']=='joystick_gcs'
     assert not p['verified'] and p['uid'] is None and p['left']['servo_neutral_pwm'] is None
     assert next(bundle.glob('motor_interface.before-refresh-*')).read_text()==old
     assert json.loads((bundle/'boat.json').read_text())['parameter_export_sha256']==hashlib.sha256(file.read_bytes()).hexdigest()
@@ -84,7 +87,7 @@ def test_nonambiguous_servo_functions_required(bundle):
 def test_mass_and_measurement_command_updates_only_local_config(bundle):
     main(['--directory',str(bundle),'configure','--mass-kg','24.5','--mass-std-kg','0.5',
           '--imu-offset','0.1','0','0.2','--left-servo-neutral','1510','--right-servo-neutral','1510',
-          '--left-servo-forward-sign','-1','--right-servo-forward-sign','1','--enable-rc-channel','7'])
+          '--left-servo-forward-sign','-1','--right-servo-forward-sign','1'])
     p=json.loads((bundle/'motor_interface.json').read_text())
     assert p['left']['servo_neutral_pwm']==1510 and p['left']['servo_forward_pwm_sign']==-1
     assert p['expected_parameters']['RC7_OPTION']==0
@@ -168,3 +171,36 @@ def test_analysis_uses_session_mass_and_checks_routing(bundle,tmp_path,monkeypat
     csv.with_suffix('.json').write_text(json.dumps(meta))
     with pytest.raises(SystemExit): main(['--directory',str(bundle),'analyze',str(csv),'--output',str(tmp_path/'report2')])
     assert len(measured)==1
+
+
+def test_gcs_authority_cannot_be_enabled_by_approval_flags(bundle):
+    profile=json.loads((bundle/'motor_interface.json').read_text())
+    profile.update(verified=True, **{key:True for key in CHECKS})
+    (bundle/'motor_interface.json').write_text(json.dumps(profile))
+    with pytest.raises(ValueError,match='Joystick/GCS command arbitration is not implemented'):
+        MotorInterface(bundle/'motor_interface.json','hardware')
+    assert not report(bundle)['powered_ready']
+    with pytest.raises(ValueError,match='Joystick/GCS'):
+        command_for_run(bundle,'powered',True)
+
+
+def test_existing_receiver_profile_can_record_confirmed_gcs_source(bundle):
+    profile=json.loads((bundle/'motor_interface.json').read_text())
+    profile.pop('control_authority')
+    profile.update(enable_rc_channel=7,verified=True)
+    (bundle/'motor_interface.json').write_text(json.dumps(profile))
+    main(['--directory',str(bundle),'configure','--control-authority','joystick_gcs'])
+    updated=json.loads((bundle/'motor_interface.json').read_text())
+    assert updated['control_authority']=='joystick_gcs' and updated['enable_rc_channel'] is None
+    assert not updated['verified']
+    assert updated['expected_parameters']==profile['expected_parameters']
+    assert json.loads((bundle/'boat.json').read_text())['control_authority']=='joystick_gcs'
+    with pytest.raises(SystemExit):
+        main(['--directory',str(bundle),'configure','--enable-rc-channel','7'])
+
+
+def test_unknown_control_authority_is_not_silently_treated_as_receiver(calibration):
+    profile=json.loads(calibration.read_text()); profile['control_authority']='unknown'
+    calibration.write_text(json.dumps(profile))
+    with pytest.raises(ValueError,match='Unknown control authority'):
+        MotorInterface(calibration,'sitl')

@@ -10,6 +10,11 @@ class MotorInterface:
     def __init__(self, path, target):
         path = Path(path)
         config = json.loads(path.read_text())
+        authority = config.get('control_authority', 'rc_receiver')
+        if authority == 'joystick_gcs':
+            raise ValueError('Joystick/GCS command arbitration is not implemented; powered operation is blocked. Use telemetry/shadow until GCS handoff and ground-link loss handling are integrated and tested.')
+        if authority != 'rc_receiver':
+            raise ValueError('Unknown control authority: ' + str(authority))
         if config.get('schema') != 1 or config.get('verified') is not True or config.get('target') != target:
             raise ValueError('Actuation requires a verified motor interface for this deployment target')
         if target not in ('sitl', 'hardware') or not config.get('vehicle_id') or not config.get('firmware_version'):

@@ -10,16 +10,18 @@
     "right_servo_output": 1,
     "left_servo_output": 3,
     "rc_neutral_pwm": 1500,
-    "forward_above_neutral": true
+    "forward_above_neutral": true,
+    "manual_takeover": "joystick + GCS (confirmed by user)"
   },
   "unknown": [
     "actual servo neutral and forward sign",
     "hardware UID, component ID and encoded firmware version",
-    "physical enable-switch channel",
     "IMU offset from COM",
     "mass uncertainty",
     "completed takeover/failsafe/SITL/telemetry tests",
-    "measured force or effective-force curves"
+    "measured force or effective-force curves",
+    "GCS software/router, exclusive command handoff and independent ground-link loss integration"
   ],
-  "scope": "Hardware-specific draft; not a SITL identity or measured thrust calibration"
+  "scope": "Hardware-specific draft; not a SITL identity or measured thrust calibration",
+  "control_authority": "joystick_gcs"
 }

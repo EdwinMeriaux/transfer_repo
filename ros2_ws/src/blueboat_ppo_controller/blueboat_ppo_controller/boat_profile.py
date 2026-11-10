@@ -54,7 +54,7 @@ def interface_from_parameters(values, template):
         if key.startswith('FS_') or re.fullmatch(r'RC\d+_OPTION', key):
             expected[key] = value
     enable = [c for c in range(1, 9) if values.get(f'RC{c}_OPTION') == 46]
-    profile['enable_rc_channel'] = enable[0] if len(enable) == 1 else None
+    profile['enable_rc_channel'] = enable[0] if len(enable) == 1 and profile.get('control_authority', 'rc_receiver') == 'rc_receiver' else None
     for side, rc_key, function in [('left', 'RCMAP_ROLL', 73), ('right', 'RCMAP_THROTTLE', 74)]:
         channel = values[rc_key]
         outputs = [n for n in range(1, 17) if values.get(f'SERVO{n}_FUNCTION') == function]
@@ -115,20 +115,25 @@ def report(directory):
     boat = json.loads((directory / 'boat.json').read_text())
     expected = profile['expected_parameters']
     issues = []
+    authority = profile.get('control_authority', 'rc_receiver')
+    if authority == 'joystick_gcs':
+        issues.append('Joystick/GCS takeover confirmed. Command arbitration and independent ground-link loss handling are not implemented; powered operation is blocked until integrated and tested.')
+    elif authority != 'rc_receiver':
+        issues.append('Unknown control authority: ' + str(authority))
     if profile.get('verified') is not True:
         issues.append('Motor interface is unverified; completed test evidence must be reviewed.')
     if expected.get('MOT_THST_ASYM') != 1:
         issues.append(f"MOT_THST_ASYM={expected.get('MOT_THST_ASYM')}: this independent-curve adapter requires 1; do not change without paired-output review.")
     if not 0 < expected.get('RC_OVERRIDE_TIME', -1) <= .5:
         issues.append(f"RC_OVERRIDE_TIME={expected.get('RC_OVERRIDE_TIME')}: a tested positive timeout <=0.5 s is required.")
-    if expected.get('FS_THR_ENABLE', 0) == 0:
+    if authority == 'rc_receiver' and expected.get('FS_THR_ENABLE', 0) == 0:
         issues.append('FS_THR_ENABLE=0: receiver failsafe is disabled; this package requires it enabled and tested.')
     if expected.get('FS_GCS_ENABLE', 0) == 0:
         issues.append('GCS failsafe is disabled; it must be enabled and tested.')
-    if int(expected.get('RC_OPTIONS', 0)) & 5:
+    if authority == 'rc_receiver' and int(expected.get('RC_OPTIONS', 0)) & 5:
         issues.append(f"RC_OPTIONS={expected.get('RC_OPTIONS')}: physical receiver / receiver failsafe flags are ignored (bits 0/2); incompatible with receiver takeover.")
     channel = profile.get('enable_rc_channel')
-    if type(channel) is not int or expected.get(f'RC{channel}_OPTION') != 46:
+    if authority == 'rc_receiver' and (type(channel) is not int or expected.get(f'RC{channel}_OPTION') != 46):
         issues.append('No verified separate RC override-enable switch (RCn_OPTION=46); channel must be chosen and tested on the vehicle.')
     for key in ('compid', 'flight_sw_version', 'uid'):
         if type(profile.get(key)) is not int or profile[key] <= 0:
@@ -144,7 +149,7 @@ def report(directory):
         MotorInterface(directory / 'motor_interface.json', profile['target'])
     except (ValueError, KeyError, TypeError, OSError) as error:
         issues.append('MotorInterface preflight: ' + str(error))
-    return dict(vehicle=profile['vehicle_id'], mass_kg=boat['mass_kg'], mass_source=boat['mass_source'],
+    return dict(vehicle=profile['vehicle_id'], control_authority=authority, mass_kg=boat['mass_kg'], mass_source=boat['mass_source'],
                 mapping={s:profile[s] for s in ('left','right')}, powered_ready=not issues,
                 blockers=issues, note='Static checks only; live telemetry, operator enable, mode, arm and output checks still apply. No FC settings were written.')
 
@@ -184,6 +189,7 @@ def main(args=None):
     refresh.add_argument('--params', type=Path, required=True)
     subs.add_parser('status')
     configure = subs.add_parser('configure', help='Save measurements/candidate channel; invalidates interface approval')
+    configure.add_argument('--control-authority', choices=('rc_receiver','joystick_gcs'))
     configure.add_argument('--mass-kg', type=float)
     configure.add_argument('--mass-std-kg', type=float)
     configure.add_argument('--imu-offset', nargs=3, type=float, metavar=('X','Y','Z'))
@@ -227,6 +233,11 @@ def main(args=None):
             boat = json.loads((directory/'boat.json').read_text())
             analysis = json.loads((directory/'analysis.json').read_text())
             config = yaml.safe_load((directory/'thrust_calibration.yaml').read_text())
+            if parsed.control_authority is not None:
+                profile['control_authority'] = parsed.control_authority
+                boat['control_authority'] = parsed.control_authority
+                if parsed.control_authority == 'joystick_gcs':
+                    profile['enable_rc_channel'] = None
             if parsed.mass_kg is not None:
                 if not math.isfinite(parsed.mass_kg) or parsed.mass_kg <= 0:
                     raise ValueError('Mass must be finite and positive')
@@ -241,6 +252,8 @@ def main(args=None):
                     raise ValueError('IMU offset must be finite')
                 analysis['imu_offset_flu_m'] = parsed.imu_offset
             if parsed.enable_rc_channel is not None:
+                if profile.get('control_authority', 'rc_receiver') != 'rc_receiver':
+                    raise ValueError('A receiver enable channel does not implement joystick/GCS handoff')
                 if not 1 <= parsed.enable_rc_channel <= 8 or parsed.enable_rc_channel in (profile['left']['rc_channel'],profile['right']['rc_channel'],profile['expected_parameters']['MODE_CH']):
                     raise ValueError('Enable channel must be separate from motor/mode channels and in 1..8')
                 profile['enable_rc_channel'] = parsed.enable_rc_channel
