@@ -31,7 +31,7 @@ Required `expected_parameters` include:
 - For each owned RC input: `RCn_MIN`, `MAX`, `TRIM`, `DZ`, `REVERSED`.
 - For each output: `SERVOn_FUNCTION` (73/74), `MIN`, `MAX`, `TRIM`, `REVERSED`.
 - `MOT_PWM_TYPE`, `MOT_THR_MIN`, `MOT_THR_MAX`, `MOT_SLEWRATE`, `MOT_THST_EXPO`, `MOT_STR_THR_MIX`, `MOT_THST_ASYM`, `MANUAL_STR_EXPO`, `MANUAL_OPTIONS`, `MODE_CH`.
-- `RC_OVERRIDE_TIME`: tested positive timeout ≤0.5 s; `RC_OPTIONS` must allow MAVLink overrides (bit 1 clear); `FS_GCS_ENABLE` and `FS_THR_ENABLE` must remain nonzero. Preserve and add installation-specific failsafe parameters to the expected map.
+- `RC_OVERRIDE_TIME`: tested positive timeout ≤0.5 s; `RC_OPTIONS` must allow MAVLink overrides and preserve receiver takeover/failsafe flags (bits 0, 1 and 2 clear); `FS_GCS_ENABLE` and `FS_THR_ENABLE` must remain nonzero. Preserve and add installation-specific failsafe parameters to the expected map.
 
 Mode selection must not share either owned motor input or the enable switch. Test MAVLink source/GCS identity authorization too: the controlling GCS/sysid parameters vary by firmware. Do not blindly assign IDs or disable authentication/failsafes to get output. See [ArduPilot RC input/override documentation](https://ardupilot.org/dev/docs/mavlink-rcinput.html).
 

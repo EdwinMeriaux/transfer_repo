@@ -1,5 +1,7 @@
 # Alberto: install and test the BlueBoat PPO controller
 
+**For the actual boat and parameter export supplied on 2026-11-09, start with [ALBERTO_BOAT.md](ALBERTO_BOAT.md).** It bundles the configuration, maps left to servo3/right to servo1 while preserving RC input routing, and adds short install/capture/run commands. This page remains the generic integration reference.
+
 Target: Ubuntu 22.04, ROS 2 Humble, Jetson AGX Orin. This guide assumes your existing MAVROS, ArduRover SITL and Gazebo vehicle already work. It does not install a second flight controller, replace your world or change your ArduPilot parameters.
 
 We provide the trained model, exact observation adapter, ONNX CPU inference, ROS node, calibration gate, logs and optional direct-force simulation tools. The ROS/SITL path has **not run on the development Mac**. Start with inference and shadow mode. Your installed firmware, mappings, frames, message rates and actual thrust conversion need the acceptance tests below.

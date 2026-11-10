@@ -30,6 +30,10 @@ flowchart LR
 | Reproduction and validation | [`docs/SIMULATION_VALIDATION.md`](docs/SIMULATION_VALIDATION.md) |
 | Attribution and license findings | [`docs/PROVENANCE.md`](docs/PROVENANCE.md) |
 
+## Alberto’s physical boat configuration
+
+The [boat-specific guide](docs/ALBERTO_BOAT.md) provides the prefilled November 9 parameter profile, corrected servo mapping, configurable 23 kg mass and short field commands. Run `./scripts/install_alberto.sh` on the Humble machine, then `./scripts/alberto.sh status`. The supplied settings are preserved; powered modes remain blocked until the listed receiver/failsafe/mixing differences and measurements are resolved.
+
 ## Quick start: inference and ROS 2 shadow mode
 
 On Ubuntu 22.04 with ROS 2 Humble, MAVROS, colcon and their dependencies already installed:

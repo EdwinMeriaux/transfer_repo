@@ -65,6 +65,8 @@ class MotorInterface:
             raise ValueError('Existing GCS and receiver failsafes must remain enabled')
         if int(self.expected.get('RC_OPTIONS', 2)) & 2:
             raise ValueError('RC_OPTIONS is configured to ignore MAVLink overrides')
+        if int(self.expected.get('RC_OPTIONS', 0)) & 5:
+            raise ValueError('RC_OPTIONS must not ignore the physical receiver or receiver failsafe flags')
 
 
     def verify_parameters(self, actual):

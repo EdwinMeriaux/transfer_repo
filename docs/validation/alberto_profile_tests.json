@@ -1,0 +1,42 @@
+{
+  "client_date": "2026-11-09",
+  "baseline_commit": "c62d5f8",
+  "parameter_export_sha256": "a6005b927404b6fa17edfee31ccb66c8afd878cbe5bf8444ff1ead30d351cda4",
+  "pinned_parameters": 66,
+  "all_pins_match_supplied_export": true,
+  "reported_mass_kg": 23.0,
+  "mass_is_approximate_and_configurable": true,
+  "physical_output_mapping": {"left": 3, "right": 1},
+  "rc_input_mapping": {"left": 1, "right": 3},
+  "pytest": {
+    "command": ".venv/bin/python -m pytest -q -ra",
+    "passed": 110,
+    "skipped": 4,
+    "skips": ["Three opt-in live powered SITL tests", "Real ROS 2 message serialization unavailable on macOS"]
+  },
+  "additional_checks": [
+    "Supplied parameter export integrity and all selected values preserved",
+    "Independent RC-input versus servo-output ordering",
+    "Unknown servo feedback neutral/signs and identity remain unset",
+    "No automatic calibration or safety-test approval",
+    "No overwrite on initialization; refresh backs up old interface and invalidates approvals",
+    "Mass and measurement updates; invalid measurements leave files unchanged",
+    "Analysis uses recorded session mass and rejects mismatched routing",
+    "Mocked capture calls only read-only MAVROS services and leaves approvals false",
+    "Physical receiver / receiver failsafe ignore bits block MotorInterface",
+    "Python 3.10 AST syntax check and bash syntax checks",
+    "sdist and wheel build; bundled profile and CLI entrypoint present",
+    "Installed wheel commands run from outside checkout",
+    "Markdown local links and git whitespace checks",
+    "Original policy, observation, motor conversion, PPO/calibration nodes unchanged"
+  ],
+  "not_executed": [
+    "Ubuntu 22.04 / Jetson installer and colcon runtime",
+    "Live ROS topic/service capture or launch",
+    "ArduPilot SITL acceptance",
+    "Any powered physical-boat operation"
+  ],
+  "powered_configuration_verified": false,
+  "flight_controller_parameters_modified": false,
+  "physical_takeover_architecture_confirmed": false
+}
