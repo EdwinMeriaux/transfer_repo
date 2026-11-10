@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 
 BLUEBOAT_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BLUEBOAT_WORKSPACE="${BLUEBOAT_WORKSPACE:-$HOME/blueboat_ws}"
@@ -11,6 +11,7 @@ fi
 if [[ -f "$BLUEBOAT_WORKSPACE/install/setup.bash" ]]; then
   source "$BLUEBOAT_WORKSPACE/install/setup.bash"
 fi
+set -u
 export PYTHONPATH="$BLUEBOAT_REPO/ros2_ws/src/blueboat_ppo_controller${PYTHONPATH:+:$PYTHONPATH}"
 
 exec python3 -m blueboat_ppo_controller.mission_node \
