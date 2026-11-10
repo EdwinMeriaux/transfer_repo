@@ -23,6 +23,7 @@ class MissionNode(Node):
             distance_m=arguments.distance,
             return_distance_m=arguments.return_distance,
             center_distance_m=arguments.center_distance,
+            return_offset_m=arguments.return_offset,
             diameter_m=arguments.diameter,
             speed_m_s=arguments.speed,
             max_yaw_rate_rad_s=arguments.max_yaw_rate,
@@ -117,6 +118,7 @@ def arguments(argv=None):
     parser.add_argument('--distance', type=float, default=20.0)
     parser.add_argument('--return-distance', type=float, default=18.0)
     parser.add_argument('--center-distance', type=float, default=25.0)
+    parser.add_argument('--return-offset', type=float, default=2.0)
     parser.add_argument('--diameter', type=float, default=12.0)
     parser.add_argument('--speed', type=float, default=0.4)
     parser.add_argument('--max-yaw-rate', type=float, default=0.3)

@@ -43,6 +43,17 @@ def test_circle_center_and_geometry_are_relative():
     assert mission.rim == pytest.approx([35, 26])
     assert mission.stage == 'to_rim'
 
+    mission.stage = 'circle'
+    mission.circle_progress = 2 * math.pi
+    mission.circle_last_angle = math.pi / 2
+    command = mission.update(np.array([35.0, 26.0]), 0.0)
+    assert not command.complete
+    assert mission.stage == 'circle_return'
+    assert mission.target == pytest.approx([12, 20])
+    command = mission.update(np.array([12.0, 20.0]), math.pi)
+    assert command.complete
+    assert mission.stage == 'complete'
+
 
 def test_command_limits_and_bad_configuration():
     with pytest.raises(ValueError):
@@ -51,6 +62,8 @@ def test_command_limits_and_bad_configuration():
         MissionController('out-and-back', speed_m_s=.81)
     with pytest.raises(ValueError):
         MissionController('out-and-back', distance_m=20, return_distance_m=21)
+    with pytest.raises(ValueError):
+        MissionController('center-circle', center_distance_m=25, return_offset_m=25)
     mission = MissionController('out-and-back')
     command = mission.update([0, 0], math.pi)
     assert abs(command.surge_m_s) <= .8

@@ -48,7 +48,8 @@ for spine in ax.spines.values():
     spine.set_color('#7fc9d8')
 ax.set_xlabel('local east / x (m)', color='#d7eef4')
 ax.set_ylabel('local north / y (m)', color='#d7eef4')
-title = '20 m out, 180° turn, 18 m back' if summary['mission'] == 'out-and-back' else '25 m to center, 12 m-diameter circle'
+title = ('20 m out, 180° turn, 18 m back' if summary['mission'] == 'out-and-back'
+         else '25 m to center, 12 m circle, return 2 m from start')
 ax.set_title('BlueBoat PPO — Gazebo Harmonic\n' + title, color='white', fontsize=16, pad=14)
 
 ax.plot(x, y, color='#70d6ff', alpha=.24, linewidth=2)
@@ -63,6 +64,9 @@ else:
     center = np.asarray(summary['reached_center_m'])
     ax.scatter([center[0]], [center[1]], marker='+', s=180, color='white', linewidths=2, label='circle center')
     ax.add_patch(Circle(center, 6., fill=False, linestyle='--', linewidth=2, edgecolor='white', alpha=.65))
+    return_target = np.array([x[0]+2*math.cos(yaw[0]), y[0]+2*math.sin(yaw[0])])
+    ax.scatter([return_target[0]], [return_target[1]], s=90, facecolors='none',
+               edgecolors='#ff9f1c', linewidths=2, label='return target')
 ax.legend(loc='upper left', facecolor='#082d38', labelcolor='white')
 
 boat = Polygon(np.zeros((3, 2)), closed=True, facecolor='#ff595e', edgecolor='white', linewidth=1.5, zorder=8)

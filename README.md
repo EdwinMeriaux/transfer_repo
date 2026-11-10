@@ -73,7 +73,7 @@ python -m pytest -q
 
 ## Simple relative-distance field scripts
 
-The `alberto/simple-field-scripts` branch adds three standalone launchers for an explicitly unchecked PWM pulse sequence, a 20 m outward / 18 m return route, and a 25 m approach followed by a 12 m-diameter circle. The routes are relative to the starting local-odometry pose rather than GPS latitude/longitude waypoints. See [`docs/SIMPLE_FIELD_RUNS.md`](docs/SIMPLE_FIELD_RUNS.md).
+The `alberto/simple-field-scripts` branch adds three standalone launchers for an explicitly unchecked PWM pulse sequence, a 20 m outward / 18 m return route, and a 25 m approach followed by a 12 m-diameter circle and return to 2 m ahead of the start. The routes are relative to the starting local-odometry pose rather than GPS latitude/longitude waypoints. See [`docs/SIMPLE_FIELD_RUNS.md`](docs/SIMPLE_FIELD_RUNS.md).
 
 Tests explicitly skip real ROS message serialization when ROS 2 is unavailable. Transport-mocked node tests are separately identified. See the validation report for what actually ran.
 

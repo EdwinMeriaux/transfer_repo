@@ -14,4 +14,4 @@ fi
 export PYTHONPATH="$BLUEBOAT_REPO/ros2_ws/src/blueboat_ppo_controller${PYTHONPATH:+:$PYTHONPATH}"
 
 exec python3 -m blueboat_ppo_controller.mission_node \
-  --mission center-circle --center-distance 25 --diameter 12 "$@"
+  --mission center-circle --center-distance 25 --diameter 12 --return-offset 2 "$@"

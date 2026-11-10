@@ -33,7 +33,7 @@ for _ in range(600):
 
 controller = MissionController(
     args.mission, distance_m=20., return_distance_m=18., center_distance_m=25., diameter_m=12.,
-    speed_m_s=args.speed, max_yaw_rate_rad_s=.3, arrival_radius_m=.6)
+    return_offset_m=2., speed_m_s=args.speed, max_yaw_rate_rad_s=.3, arrival_radius_m=.6)
 previous = np.zeros(2)
 records = []
 stage_ids = {}
@@ -101,8 +101,10 @@ else:
     circle_positions = positions[circle_rows]
     radii = np.linalg.norm(circle_positions - controller.center, axis=1)
     summary.update(
-        requested_center_distance_m=25., requested_diameter_m=12.,
+        requested_center_distance_m=25., requested_diameter_m=12., requested_return_offset_m=2.,
         reached_center_m=controller.center.tolist(),
+        return_target_m=controller.target.tolist(),
+        final_return_target_error_m=float(np.linalg.norm(positions[-1] - controller.target)),
         mean_circle_radius_m=float(np.mean(radii)),
         circle_radius_rmse_m=float(np.sqrt(np.mean((radii-controller.radius)**2))),
         circle_progress_rad=float(controller.circle_progress))

@@ -38,13 +38,13 @@ Optional example:
 
 The boat stores its starting position and heading, drives 20 m along that heading, rotates 180 degrees, returns 18 m along the same line, stops approximately 2 m before the original starting position and publishes zero for two seconds.
 
-## 3. Forward 25 m, then one 12 m-diameter circle
+## 3. Forward 25 m, one 12 m-diameter circle, then return to 2 m
 
 ```bash
 ./scripts/03_forward_25m_circle_12m.sh
 ```
 
-The boat drives 25 m along its starting heading. Its actual reached position becomes the circle center. Because a circle cannot begin at its center, it then moves 6 m to the left-hand rim, aligns with the original heading, makes one clockwise 12 m-diameter circle, and stops.
+The boat drives 25 m along its starting heading. Its actual reached position becomes the circle center. Because a circle cannot begin at its center, it then moves 6 m to the left-hand rim, aligns with the original heading, makes one clockwise 12 m-diameter circle, and returns to a target 2 m ahead of the original starting position.
 
 ## Overrides
 
@@ -69,5 +69,6 @@ Both relative-distance controllers were tested in calm-water Gazebo Harmonic usi
 | Circle-route cruise | 0.400 m/s | 0.377 m/s mean, 0.027 m/s RMSE, 0.409 m/s peak |
 | Circle radius | 6.0 m | 6.086 m mean, 0.168 m RMSE |
 | Circle progress | 2π rad | 6.284 rad |
+| Circle-route final position | 2.0 m ahead of start | 2.038 m from start; 0.039 m target error |
 
 The exact machine-readable record is [`validation/simple_field_missions.json`](validation/simple_field_missions.json).
