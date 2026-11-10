@@ -15,6 +15,8 @@ setup(name='blueboat_ppo_controller', version='0.1.0',
         'alberto_boat = blueboat_ppo_controller.boat_profile:main',
         'blueboat_gateway = blueboat_ppo_controller.mavlink_gateway:main',
         'blueboat_owner = blueboat_ppo_controller.ground_owner:main',
+        'blueboat_simple_mission = blueboat_ppo_controller.mission_node:main',
+        'unchecked_calibration = blueboat_ppo_controller.unchecked_calibration:main',
         'thrust_calibration = blueboat_ppo_controller.calibration_node:main',
         'calibration_analyze = blueboat_ppo_controller.calibration_analysis:main',
         'calibration_synthetic = blueboat_ppo_controller.calibration_synthetic:main']})

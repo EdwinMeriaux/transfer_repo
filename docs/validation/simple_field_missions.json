@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-10",
+  "branch": "alberto/simple-field-scripts",
+  "simulator": "Gazebo Harmonic 8.10.0, calm-water direct-force pathway",
+  "policy_checkpoint_sha256": "43213ea3bc2219d93acf991fdb74c02a559c1d2ed77a8af266138474eb1269e4",
+  "upstream_blueboat_commit": "25bc38ed8c6c0345840159a8cbc0b02781d52f3c",
+  "asv_wave_sim_commit": "ca8629df4e191235753dfae92ef725d30b923364",
+  "command_limits": {
+    "forward_speed_m_s": 0.4,
+    "maximum_yaw_rate_rad_s": 0.3,
+    "circle_nominal_yaw_rate_rad_s": 0.06666666666666667
+  },
+  "out_and_back": {
+    "completed": true,
+    "simulated_duration_s": 109.1,
+    "requested_distance_m": 20.0,
+    "maximum_distance_from_start_m": 19.488254239796905,
+    "return_position_error_m": 0.037048971479541316,
+    "actual_cruise_speed_mean_m_s": 0.37982160423182426,
+    "cruise_speed_rmse_m_s": 0.027343347161760054,
+    "maximum_forward_speed_m_s": 0.4037896070997895,
+    "yaw_rate_rmse_rad_s": 0.06344591748968405,
+    "maximum_abs_roll_rad": 0.008374127447978719,
+    "maximum_abs_pitch_rad": 0.06767834173292653
+  },
+  "center_circle": {
+    "completed": true,
+    "simulated_duration_s": 189.22,
+    "requested_center_distance_m": 25.0,
+    "reached_center_m": [24.64200226998896, 0.033054478316026696],
+    "requested_diameter_m": 12.0,
+    "mean_circle_radius_m": 6.085769004278196,
+    "circle_radius_rmse_m": 0.1678279142333182,
+    "circle_progress_rad": 6.283900514457572,
+    "actual_cruise_speed_mean_m_s": 0.3768469566595113,
+    "cruise_speed_rmse_m_s": 0.02651628890610719,
+    "maximum_forward_speed_m_s": 0.4092917784396154,
+    "yaw_rate_rmse_rad_s": 0.06106216996744116,
+    "maximum_abs_roll_rad": 0.008563887329706588,
+    "maximum_abs_pitch_rad": 0.07279642726263202
+  },
+  "scope": "Validates relative-distance path control and the ONNX-to-Gazebo force pathway. It does not validate ROS serialization, MAVROS, ArduRover, gateway arbitration, PWM calibration or physical deployment."
+}

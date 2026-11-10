@@ -71,6 +71,10 @@ python -m pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
+## Simple relative-distance field scripts
+
+The `alberto/simple-field-scripts` branch adds three standalone launchers for an explicitly unchecked PWM pulse sequence, a 20 m out-and-back route, and a 25 m approach followed by a 12 m-diameter circle. The routes are relative to the starting local-odometry pose rather than GPS latitude/longitude waypoints. See [`docs/SIMPLE_FIELD_RUNS.md`](docs/SIMPLE_FIELD_RUNS.md).
+
 Tests explicitly skip real ROS message serialization when ROS 2 is unavailable. Transport-mocked node tests are separately identified. See the validation report for what actually ran.
 
 The separate `thrust_calibration` executable defaults to **dry-run** and has no motor publisher in dry-run/telemetry modes. It records IMU/attitude/velocity/PWM, requires a sustained rest baseline before guarded single/symmetric motor pulses, and fits draft forward/reverse **effective surge-force** tables using the recorded total-mass parameter. Analysis produces a guarded PPO calibration draft; the original PPO outputs remain in Newtons. Follow [Alberto's calibration guide](docs/THRUST_CALIBRATION.md) for synthetic tests, live SITL acceptance, physical assumptions and optional PPO integration. These estimates are not static propeller thrust, and independent motor forces are not automatically identified.
