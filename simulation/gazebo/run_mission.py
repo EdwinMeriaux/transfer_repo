@@ -32,7 +32,7 @@ for _ in range(600):
     boat.step(np.zeros(2))
 
 controller = MissionController(
-    args.mission, distance_m=20., center_distance_m=25., diameter_m=12.,
+    args.mission, distance_m=20., return_distance_m=18., center_distance_m=25., diameter_m=12.,
     speed_m_s=args.speed, max_yaw_rate_rad_s=.3, arrival_radius_m=.6)
 previous = np.zeros(2)
 records = []
@@ -94,6 +94,7 @@ summary = dict(
 if args.mission == 'out-and-back':
     summary.update(
         requested_outbound_m=20.,
+        requested_return_m=18.,
         maximum_distance_from_start_m=float(np.max(np.linalg.norm(positions-origin, axis=1))))
 else:
     circle_rows = np.array([row[1] == 'circle' for row in records])

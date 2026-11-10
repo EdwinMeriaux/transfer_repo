@@ -48,7 +48,7 @@ for spine in ax.spines.values():
     spine.set_color('#7fc9d8')
 ax.set_xlabel('local east / x (m)', color='#d7eef4')
 ax.set_ylabel('local north / y (m)', color='#d7eef4')
-title = '20 m out, 180° turn, return' if summary['mission'] == 'out-and-back' else '25 m to center, 12 m-diameter circle'
+title = '20 m out, 180° turn, 18 m back' if summary['mission'] == 'out-and-back' else '25 m to center, 12 m-diameter circle'
 ax.set_title('BlueBoat PPO — Gazebo Harmonic\n' + title, color='white', fontsize=16, pad=14)
 
 ax.plot(x, y, color='#70d6ff', alpha=.24, linewidth=2)

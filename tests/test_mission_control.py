@@ -15,7 +15,7 @@ def test_yaw_and_angle_helpers():
 
 
 def test_out_and_back_relative_to_start_heading():
-    mission = MissionController('out-and-back', distance_m=20)
+    mission = MissionController('out-and-back', distance_m=20, return_distance_m=18)
     start = np.array([7.0, -4.0])
     command = mission.update(start, math.pi/2)
     assert mission.stage == 'outbound'
@@ -27,7 +27,8 @@ def test_out_and_back_relative_to_start_heading():
     for _ in range(5):
         mission.update(np.array([7.0, 16.0]), -math.pi/2)
     assert mission.stage == 'return'
-    command = mission.update(start, -math.pi/2)
+    assert mission.target == pytest.approx([7, -2])
+    command = mission.update(np.array([7.0, -2.0]), -math.pi/2)
     assert command.complete
     assert mission.stage == 'complete'
 
@@ -48,6 +49,8 @@ def test_command_limits_and_bad_configuration():
         MissionController('bad')
     with pytest.raises(ValueError):
         MissionController('out-and-back', speed_m_s=.81)
+    with pytest.raises(ValueError):
+        MissionController('out-and-back', distance_m=20, return_distance_m=21)
     mission = MissionController('out-and-back')
     command = mission.update([0, 0], math.pi)
     assert abs(command.surge_m_s) <= .8

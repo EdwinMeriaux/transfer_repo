@@ -21,6 +21,7 @@ class MissionNode(Node):
         self.controller = MissionController(
             arguments.mission,
             distance_m=arguments.distance,
+            return_distance_m=arguments.return_distance,
             center_distance_m=arguments.center_distance,
             diameter_m=arguments.diameter,
             speed_m_s=arguments.speed,
@@ -114,6 +115,7 @@ def arguments(argv=None):
     parser = argparse.ArgumentParser(description='Publish a simple position-feedback BlueBoat mission')
     parser.add_argument('--mission', choices=('out-and-back', 'center-circle'), required=True)
     parser.add_argument('--distance', type=float, default=20.0)
+    parser.add_argument('--return-distance', type=float, default=18.0)
     parser.add_argument('--center-distance', type=float, default=25.0)
     parser.add_argument('--diameter', type=float, default=12.0)
     parser.add_argument('--speed', type=float, default=0.4)

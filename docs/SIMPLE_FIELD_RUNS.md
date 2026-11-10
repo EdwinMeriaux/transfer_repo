@@ -30,13 +30,13 @@ Optional example:
 ./scripts/01_calibrate_unchecked.sh --delta -20 20 --repeats 1
 ```
 
-## 2. Forward 20 m, turn 180 degrees, return
+## 2. Forward 20 m, turn 180 degrees, return 18 m
 
 ```bash
 ./scripts/02_out_20m_turn_return.sh
 ```
 
-The boat stores its starting position and heading, drives 20 m along that heading, rotates 180 degrees, returns to the starting position and publishes zero for two seconds.
+The boat stores its starting position and heading, drives 20 m along that heading, rotates 180 degrees, returns 18 m along the same line, stops approximately 2 m before the original starting position and publishes zero for two seconds.
 
 ## 3. Forward 25 m, then one 12 m-diameter circle
 
@@ -63,9 +63,9 @@ Both relative-distance controllers were tested in calm-water Gazebo Harmonic usi
 
 | Route | Target | Gazebo result |
 |---|---:|---:|
-| 20 m out-and-back cruise | 0.400 m/s | 0.380 m/s mean, 0.027 m/s RMSE, 0.404 m/s peak |
+| 20 m out / 18 m back cruise | 0.400 m/s | 0.380 m/s mean, 0.028 m/s RMSE, 0.404 m/s peak |
 | Outbound distance | 20.0 m | 19.49 m at the configured 0.6 m arrival radius |
-| Return error | 0 m | 0.037 m |
+| Final position | 2.0 m ahead of start | 2.034 m ahead; 0.037 m target error |
 | Circle-route cruise | 0.400 m/s | 0.377 m/s mean, 0.027 m/s RMSE, 0.409 m/s peak |
 | Circle radius | 6.0 m | 6.086 m mean, 0.168 m RMSE |
 | Circle progress | 2π rad | 6.284 rad |

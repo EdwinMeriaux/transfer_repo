@@ -31,19 +31,22 @@ class Command:
 class MissionController:
     """Position-feedback mission controller whose output matches the PPO command contract."""
 
-    def __init__(self, mission, *, distance_m=20.0, center_distance_m=25.0,
+    def __init__(self, mission, *, distance_m=20.0, return_distance_m=18.0, center_distance_m=25.0,
                  diameter_m=12.0, speed_m_s=0.4, max_yaw_rate_rad_s=0.3,
                  arrival_radius_m=0.6):
         if mission not in ('out-and-back', 'center-circle'):
             raise ValueError('Unknown mission')
-        values = (distance_m, center_distance_m, diameter_m, speed_m_s,
+        values = (distance_m, return_distance_m, center_distance_m, diameter_m, speed_m_s,
                   max_yaw_rate_rad_s, arrival_radius_m)
         if not np.isfinite(values).all() or any(value <= 0 for value in values):
             raise ValueError('Mission dimensions and limits must be finite and positive')
         if speed_m_s > 0.8 or max_yaw_rate_rad_s > 0.4:
             raise ValueError('Mission exceeds PPO command limits')
+        if return_distance_m > distance_m:
+            raise ValueError('Return distance cannot exceed outbound distance')
         self.mission = mission
         self.distance = float(distance_m)
+        self.return_distance = float(return_distance_m)
         self.center_distance = float(center_distance_m)
         self.radius = float(diameter_m) / 2.0
         self.speed = float(speed_m_s)
@@ -140,7 +143,8 @@ class MissionController:
                 command, aligned = self._rotate(yaw, self.turn_target, self.stage)
                 if aligned:
                     self.stage = 'return'
-                    self.target = self.origin.copy()
+                    forward = np.array([math.cos(self.initial_yaw), math.sin(self.initial_yaw)])
+                    self.target = self.origin + (self.distance - self.return_distance) * forward
                 return command
             if self.stage == 'return':
                 command, arrived = self._drive(position, yaw, self.target, self.stage)
