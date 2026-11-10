@@ -25,7 +25,7 @@ class MotorAdapter(MotorInterface):
             if (self.lookup.data.get('verified') is not True or self.lookup.data.get('independent_mapping_reviewed') is not True
                     or self.lookup.data.get('paired_validation',{}).get('passed') is not True
                     or settings.get('mode') != 'powered' or metadata.get('synthetic') is True
-                    or identity.get('target') != target or any(identity.get(k) != config[k] for k in ('sysid','compid','flight_sw_version','uid'))
+                    or identity.get('target') != target or any(identity.get(k) != config[k] for k in ('sysid','compid','flight_sw_version'))
                     or identity.get('expected_parameters') != config['expected_parameters']
                     or self.lookup.data.get('evidence_sha256') != config['evidence_sha256']
                     or any(identity.get(side,{}).get(k) != config[side].get(k) for side in ('left','right') for k in ('rc_channel','servo_output','neutral_pwm','forward_pwm_sign'))

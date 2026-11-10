@@ -7,8 +7,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import secrets
-import socket
 import sys
 import time
 
@@ -17,11 +15,9 @@ import yaml
 from .motor_interface import MotorInterface
 
 BUNDLE = Path(__file__).parent / 'profiles/alberto'
-GCS_CHECKS = ('gcs_handoff_tested', 'gcs_ground_loss_tested', 'gcs_no_bypass_verified',
-              'gcs_heartbeat_isolation_tested', 'gcs_router_failure_tested')
 CHECKS = ('left_right_verified', 'neutral_verified', 'manual_takeover_tested', 'override_timeout_tested',
           'gcs_failsafe_tested', 'paired_motor_test_passed', 'sitl_test_passed', 'restrained_motor_test_passed',
-          'telemetry_conventions_verified', 'imu_placement_verified', 'sitl_calibration_test_passed') + GCS_CHECKS
+          'telemetry_conventions_verified', 'imu_placement_verified', 'sitl_calibration_test_passed')
 
 
 def read_parameters(path):
@@ -45,6 +41,7 @@ def read_parameters(path):
 
 def interface_from_parameters(values, template):
     profile = copy.deepcopy(template)
+    profile.pop('uid', None)
     required = ['PILOT_STEER_TYPE', 'RCMAP_ROLL', 'RCMAP_THROTTLE', 'RCMAP_PITCH', 'RCMAP_YAW',
                 'MANUAL_STR_EXPO', 'MANUAL_OPTIONS', 'MODE_CH', 'RC_OPTIONS', 'RC_OVERRIDE_TIME',
                 'MOT_PWM_TYPE', 'MOT_THR_MIN', 'MOT_THR_MAX', 'MOT_SLEWRATE', 'MOT_THST_EXPO',
@@ -75,7 +72,7 @@ def interface_from_parameters(values, template):
     if profile['left']['rc_channel'] == profile['right']['rc_channel']:
         raise ValueError('Left and right RC inputs must differ')
     profile.update(expected_parameters=expected, sysid=values['SYSID_THISMAV'], verified=False,
-                   compid=None, flight_sw_version=None, uid=None, evidence_file='', evidence_sha256='')
+                   compid=None, flight_sw_version=None, evidence_file='', evidence_sha256='')
     profile.update({key:False for key in CHECKS})
     return profile
 
@@ -120,11 +117,9 @@ def report(directory):
     expected = profile['expected_parameters']
     issues = []
     authority = profile.get('control_authority', 'rc_receiver')
-    if authority == 'joystick_gcs':
-        if not profile.get('gcs_gateway_file') or not profile.get('gcs_gateway_sha256'):
-            issues.append('Joystick/GCS takeover confirmed. Configure the exclusive MAVProxy gateway, then validate handoff and independent ground-link loss; see GCS_HANDOFF.md.')
+    if authority == 'direct_mavros':
         if expected.get('FS_ACTION') not in (2, 5):
-            issues.append(f"FS_ACTION={expected.get('FS_ACTION')}: RTL/SmartRTL may move the boat after gateway loss; a tested Hold (2) or Terminate (5) fallback is required.")
+            issues.append(f"FS_ACTION={expected.get('FS_ACTION')}: RTL/SmartRTL may move the boat after MAVROS loss; a tested Hold (2) or Terminate (5) fallback is required.")
     elif authority != 'rc_receiver':
         issues.append('Unknown control authority: ' + str(authority))
     if profile.get('verified') is not True:
@@ -145,17 +140,12 @@ def report(directory):
     for key in ('compid', 'flight_sw_version'):
         if type(profile.get(key)) is not int or profile[key] <= 0:
             issues.append('Missing live hardware identity: ' + key + '; run capture after connecting MAVROS.')
-    uid = profile.get('uid')
     warnings = []
-    if type(uid) is not int or uid < 0:
-        issues.append('Missing live hardware identity: uid; run capture after connecting MAVROS.')
-    elif uid == 0:
-        warnings.append('Flight controller reports no hardware UID; identity is pinned to system/component, exact firmware and live parameter checks.')
     for side in ('left','right'):
         motor = profile[side]
         if motor.get('servo_neutral_pwm') is None or motor.get('servo_forward_pwm_sign') not in (-1,1):
             issues.append(f"{side}: measure actual servo neutral and forward sign; RC neutral {motor['neutral_pwm']} is separate from exported servo trim {expected.get('SERVO'+str(motor['servo_output'])+'_TRIM')}.")
-    missing = [key for key in CHECKS if (authority == 'joystick_gcs' or key not in GCS_CHECKS) and profile.get(key) is not True]
+    missing = [key for key in CHECKS if profile.get(key) is not True]
     if missing:
         issues.append('Tests/evidence still pending: ' + ', '.join(missing))
     try:
@@ -202,7 +192,7 @@ def main(args=None):
     refresh.add_argument('--params', type=Path, required=True)
     subs.add_parser('status')
     configure = subs.add_parser('configure', help='Save measurements/candidate channel; invalidates interface approval')
-    configure.add_argument('--control-authority', choices=('rc_receiver','joystick_gcs'))
+    configure.add_argument('--control-authority', choices=('rc_receiver','direct_mavros'))
     configure.add_argument('--mass-kg', type=float)
     configure.add_argument('--mass-std-kg', type=float)
     configure.add_argument('--imu-offset', nargs=3, type=float, metavar=('X','Y','Z'))
@@ -210,14 +200,6 @@ def main(args=None):
     for side in ('left','right'):
         configure.add_argument('--'+side+'-servo-neutral', type=int)
         configure.add_argument('--'+side+'-servo-forward-sign', type=int, choices=(-1,1))
-    gateway = subs.add_parser('gateway-configure', help='Set local endpoint routing and create a private ground-grant key; resets approvals')
-    gateway.add_argument('--qgc-ip', required=True)
-    gateway.add_argument('--qgc-port', type=int, default=14550)
-    gateway.add_argument('--mavproxy-ip', default='127.0.0.1')
-    gateway.add_argument('--mavproxy-port', type=int, default=0, help='0 learns/pins source port from first FC heartbeat')
-    gateway.add_argument('--vehicle-component', type=int, default=1)
-    gateway_run = subs.add_parser('gateway', help='Run gateway in read-only monitor mode by default')
-    gateway_run.add_argument('--enable-forwarding', action='store_true')
     subs.add_parser('capture', help='Read live identity and pinned parameters; no arming or parameter writes')
     run = subs.add_parser('run')
     run.add_argument('mode', choices=('telemetry','dry_run','shadow','powered','ppo'))
@@ -241,44 +223,7 @@ def main(args=None):
             command = command_for_run(directory, parsed.mode, parsed.enable_actuators, parsed.calibration)
             os.execvp(command[0], command)
         profile = json.loads((directory/'motor_interface.json').read_text())
-        if parsed.operation == 'gateway':
-            command = [sys.executable, '-m', 'blueboat_ppo_controller.mavlink_gateway',
-                       '--config', str(directory/'gateway.json'), '--interface', str(directory/'motor_interface.json')]
-            if parsed.enable_forwarding:
-                command.append('--enable-forwarding')
-            os.execv(command[0], command)
-        if parsed.operation == 'gateway-configure':
-            from .authority import gateway_config
-            for host in (parsed.qgc_ip, parsed.mavproxy_ip):
-                socket.inet_pton(socket.AF_INET, host)
-            config = dict(schema=1, upstream_bind=['0.0.0.0',14600], upstream_peer=[parsed.mavproxy_ip,parsed.mavproxy_port],
-                          qgc_bind=['0.0.0.0',14601], qgc_peer=[parsed.qgc_ip,parsed.qgc_port],
-                          mavros_bind=['127.0.0.1',14603], mavros_peer=['127.0.0.1',14602], control_bind=['0.0.0.0',14604],
-                          vehicle_system=profile['sysid'], vehicle_component=parsed.vehicle_component,
-                          gcs_system=profile['expected_parameters']['SYSID_MYGCS'], mavros_system=254, gateway_component=191,
-                          socket_file='gw.sock', status_file='gateway-status.json', key_file='ground.key')
-            temporary = directory/'gateway.candidate.json'
-            try:
-                write_json(temporary, config)
-                checked = gateway_config(temporary)
-            finally:
-                temporary.unlink(missing_ok=True)
-            key_path = directory/'ground.key'
-            if not key_path.exists():
-                descriptor = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-                with os.fdopen(descriptor, 'w') as stream:
-                    stream.write(secrets.token_hex(32)+'\n')
-            if len(bytes.fromhex(key_path.read_text().strip())) != 32 or key_path.stat().st_mode & 0o077:
-                raise ValueError('Existing ground.key must contain 32 random bytes as hex and have mode 600')
-            write_json(directory/'gateway.json', config)
-            profile.update(control_authority='joystick_gcs', enable_rc_channel=None, verified=False,
-                           gcs_gateway_file='gateway.json', gcs_gateway_sha256=checked['config_sha256'], **{key:False for key in CHECKS})
-            write_json(directory/'motor_interface.json', profile)
-            boat = json.loads((directory/'boat.json').read_text())
-            boat.update(control_authority='joystick_gcs', ground_station='QGroundControl', router='MAVProxy')
-            write_json(directory/'boat.json', boat)
-            print('Prepared gateway.json and private ground.key. Follow GCS_HANDOFF.md to reroute MAVProxy/QGC/MAVROS. No network or FC setting changed; approvals reset.')
-        elif parsed.operation == 'refresh':
+        if parsed.operation == 'refresh':
             updated = interface_from_parameters(read_parameters(parsed.params), profile)
             boat = json.loads((directory/'boat.json').read_text())
             boat.update(parameter_export_sha256=hashlib.sha256(parsed.params.read_bytes()).hexdigest(), parameter_export_name=parsed.params.name)
@@ -294,8 +239,12 @@ def main(args=None):
             if parsed.control_authority is not None:
                 profile['control_authority'] = parsed.control_authority
                 boat['control_authority'] = parsed.control_authority
-                if parsed.control_authority == 'joystick_gcs':
+                if parsed.control_authority == 'direct_mavros':
                     profile['enable_rc_channel'] = None
+                    for key in ('uid', 'gcs_gateway_file', 'gcs_gateway_sha256', 'gcs_handoff_tested',
+                                'gcs_ground_loss_tested', 'gcs_no_bypass_verified',
+                                'gcs_heartbeat_isolation_tested', 'gcs_router_failure_tested'):
+                        profile.pop(key, None)
             if parsed.mass_kg is not None:
                 if not math.isfinite(parsed.mass_kg) or parsed.mass_kg <= 0:
                     raise ValueError('Mass must be finite and positive')
@@ -311,7 +260,7 @@ def main(args=None):
                 analysis['imu_offset_flu_m'] = parsed.imu_offset
             if parsed.enable_rc_channel is not None:
                 if profile.get('control_authority', 'rc_receiver') != 'rc_receiver':
-                    raise ValueError('A receiver enable channel does not implement joystick/GCS handoff')
+                    raise ValueError('A receiver enable channel does not apply to direct MAVROS control')
                 if not 1 <= parsed.enable_rc_channel <= 8 or parsed.enable_rc_channel in (profile['left']['rc_channel'],profile['right']['rc_channel'],profile['expected_parameters']['MODE_CH']):
                     raise ValueError('Enable channel must be separate from motor/mode channels and in 1..8')
                 profile['enable_rc_channel'] = parsed.enable_rc_channel
@@ -341,7 +290,7 @@ def main(args=None):
             recorded = metadata.get('motor_interface')
             if not isinstance(recorded, dict):
                 raise ValueError('No recorded motor interface; use calibration_analyze for generic synthetic/telemetry analysis')
-            if any(recorded.get(key) != profile.get(key) for key in ('target','sysid','compid','flight_sw_version','uid')):
+            if any(recorded.get(key) != profile.get(key) for key in ('target','sysid','compid','flight_sw_version')):
                 raise ValueError('Session vehicle identity differs from this local profile')
             if any(recorded.get(side, {}).get(key) != profile[side].get(key)
                    for side in ('left','right') for key in ('rc_channel','servo_output','neutral_pwm','forward_pwm_sign')):

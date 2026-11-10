@@ -3,4 +3,3 @@ pytest>=7,<10
 onnx>=1.16,<2
 build>=1,<2
 matplotlib>=3.6,<4
-pymavlink>=2.4.41,<3

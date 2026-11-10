@@ -1,6 +1,6 @@
 # Alberto: install and test the BlueBoat PPO controller
 
-**For the actual boat and parameter export supplied on 2026-11-09, start with [ALBERTO_BOAT.md](ALBERTO_BOAT.md).** It bundles the configuration, maps left to servo3/right to servo1 while preserving RC input routing, and adds short install/capture/run commands. QGroundControl/MAVProxy control is confirmed; the gateway and acceptance procedure are in [GCS_HANDOFF.md](GCS_HANDOFF.md). This page remains the generic receiver-based integration reference.
+**For the actual boat and parameter export supplied on 2026-11-09, start with [ALBERTO_BOAT.md](ALBERTO_BOAT.md).** It bundles the configuration, maps left to servo3/right to servo1 while preserving RC input routing, and uses the Jetson's direct MAVROS connection to the Pixhawk. This page remains the generic receiver-based integration reference.
 
 Target: Ubuntu 22.04, ROS 2 Humble, Jetson AGX Orin. This guide assumes your existing MAVROS, ArduRover SITL and Gazebo vehicle already work. It does not install a second flight controller, replace your world or change your ArduPilot parameters.
 
@@ -16,7 +16,7 @@ Commands below use bash and place the checkout at `~/gazebo_blue_boat`; use that
 
 ```bash
 cd ~
-git clone --branch main https://github.com/EdwinMeriaux/gazebo_blue_boat.git
+git clone --branch alberto/simple-field-scripts https://github.com/EdwinMeriaux/gazebo_blue_boat.git
 cd ~/gazebo_blue_boat
 source /opt/ros/humble/setup.bash
 sudo apt-get install python3-venv python3-pip python3-colcon-common-extensions
@@ -185,4 +185,4 @@ python -m pytest -q
 
 Here the real ROS message test should run rather than skip. Also run the actual colcon build, shadow node and full SITL experiment; mocked tests cannot establish middleware behavior. Measure sustained 50 Hz loop timing on the Jetson under the intended load, test logs/disk-full behavior, and record dependency/firmware versions.
 
-Only after successful SITL and restrained hardware calibration use a **separate** hardware calibration with `deployment_target:=hardware`. Hardware mode requires captured identity (including a recorded unavailable UID when the FC returns zero), its own evidence, and completed SITL and restrained-motor flags. Real-water validation remains outstanding, including sensors in the pool, motor dynamics, manual takeover, payload/current/wave differences and safe recovery. See [validation status](SIMULATION_VALIDATION.md) for the exact evidence already available.
+Only after successful SITL and restrained hardware calibration use a **separate** hardware calibration with `deployment_target:=hardware`. Hardware mode requires captured system/component/firmware identity and pinned parameters, its own evidence, and completed SITL and restrained-motor flags; UID is not used. Real-water validation remains outstanding, including sensors in the pool, motor dynamics, manual takeover, payload/current/wave differences and safe recovery. See [validation status](SIMULATION_VALIDATION.md) for the exact evidence already available.

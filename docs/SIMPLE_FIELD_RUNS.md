@@ -6,7 +6,7 @@ These launchers use distances relative to the first valid local odometry pose. T
 
 ## Before starting
 
-The two movement launchers publish `/blueboat/cmd_vel`; a PPO controller must already be running and subscribed to that topic. They do not arm the boat, select a flight mode, start the gateway, grant motor ownership or start a PPO actuator node. They stop and publish zero if `/mavros/local_position/odom` is absent or stale.
+The two movement launchers publish `/blueboat/cmd_vel`; a PPO controller must already be running and subscribed to that topic. They do not arm the boat, select a flight mode, enable output or start a PPO actuator node. They stop and publish zero if `/mavros/local_position/odom` is absent or stale.
 
 Local position can come from GPS/EKF, motion capture or another validated odometry source. The default frame contract is `map` / `base_link`.
 
@@ -18,11 +18,11 @@ Only run one launcher at a time.
 ./scripts/01_calibrate_unchecked.sh
 ```
 
-This intentionally bypasses the normal boat-readiness, evidence, GPS, odometry, IMU, estimator, identity, parameter, gateway and enable checks. It reads only RC channels, input neutral and direction signs from `~/.config/blueboat/alberto/motor_interface.json`, waits five seconds, and publishes the configured left/right/symmetric PWM sequence directly to `/mavros/rc/override`.
+This intentionally bypasses the normal boat-readiness, evidence, GPS, odometry, IMU, estimator, identity, parameter and enable checks. It reads only RC channels, input neutral and direction signs from `~/.config/blueboat/alberto/motor_interface.json`, waits five seconds, and publishes the configured left/right/symmetric PWM sequence directly to `/mavros/rc/override`.
 
 The sequence is `-40`, `-60`, `+40`, `+60` counts, left/right/symmetric, three repeats, with a 2 s baseline, 0.5 s pulse and 3 s recovery. It writes the commanded sequence under `~/.config/blueboat/alberto/runs/unchecked_calibration/`. The log is not a force calibration because no motion sensors are recorded.
 
-This direct publisher will not pass through a gateway configured to discard MAVROS motor commands. Ctrl+C requests neutral and then releases RC1/RC3.
+Stop QGC joystick output and every other motor sender first. Ctrl+C requests neutral and then releases RC1/RC3.
 
 Optional example:
 
@@ -59,7 +59,7 @@ Use Ctrl+C at any point to publish a zero command and exit.
 
 ## Gazebo validation
 
-Both relative-distance controllers were tested in calm-water Gazebo Harmonic using the bundled deterministic ONNX PPO and the upstream BlueBoat marine model. This was the direct-force `ONNX → Newton forces → Gazebo` test path; it validates policy/path behavior in Gazebo, not MAVROS, ArduRover, the gateway or hardware PWM conversion.
+Both relative-distance controllers were tested in calm-water Gazebo Harmonic using the bundled deterministic ONNX PPO and the upstream BlueBoat marine model. This was the direct-force `ONNX → Newton forces → Gazebo` test path; it validates policy/path behavior in Gazebo, not MAVROS, ArduRover, the Jetson/Pixhawk transport or hardware PWM conversion.
 
 | Route | Target | Gazebo result |
 |---|---:|---:|

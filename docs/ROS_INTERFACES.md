@@ -14,7 +14,7 @@ The separate `thrust_calibration` executable and offline `calibration_analyze` /
 | `/mavros/imu/data` | `sensor_msgs/msg/Imu` | `base_link`, quaternion and all three angular rates; known-valid measurements. |
 | `/mavros/state` | `mavros_msgs/msg/State` | Connected and system status standby/active, receipt ≤2 s. Actuator requires armed MANUAL. |
 | `/mavros/estimator_status` | `mavros_msgs/msg/EstimatorStatus` | Valid attitude and horizontal/vertical velocity, no glitch/error/fallback; receipt ≤2 s. |
-| `/mavros/rc/in` | `mavros_msgs/msg/RCIn` | Actuator only: separate receiver enable switch high (1800–2200), receipt ≤0.5 s. |
+| `/mavros/rc/in` | `mavros_msgs/msg/RCIn` | `rc_receiver` authority only: separate receiver enable switch high (1800–2200), receipt ≤0.5 s. Not an enable gate for `direct_mavros`. |
 
 Motion subscriptions use sensor-data QoS (best effort, volatile); command and enable use reliable depth 1. Publisher QoS compatibility must be checked in the actual ROS graph. No `/clock` source is provided. Use simulation time only if MAVROS timestamps and Gazebo's bridged clock share the same time base. Pausing simulation makes monotonic freshness expire and stops actuation.
 
@@ -35,7 +35,7 @@ The [MAVROS message definition](https://github.com/mavlink/mavros/blob/ros2/mavr
 
 Every 5 s, subject to service completion:
 
-1. `/mavros/vehicle_info_get`, `mavros_msgs/srv/VehicleInfoGet`: require one matching ArduPilot rover/boat and exact sysid/compid/firmware/recorded UID fields from calibration. A recorded zero UID means the FC did not provide one; the remaining identity and pinned-parameter checks still apply.
+1. `/mavros/vehicle_info_get`, `mavros_msgs/srv/VehicleInfoGet`: require one matching ArduPilot rover/boat and exact sysid/compid/firmware fields from calibration. Hardware UID is not read or compared.
 2. `/mavros/param/pull`, `mavros_msgs/srv/ParamPull`, `force_pull: true`: refresh flight-controller parameters.
 3. `/mavros/param/get_parameters`, `rcl_interfaces/srv/GetParameters`: compare all calibration-pinned values.
 

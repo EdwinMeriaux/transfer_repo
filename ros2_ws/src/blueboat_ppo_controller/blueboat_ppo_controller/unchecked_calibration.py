@@ -1,7 +1,7 @@
 """Explicitly unchecked PWM pulse sequence for Alberto's requested lab branch.
 
 This intentionally does not inspect GPS, odometry, IMU, estimator, vehicle identity,
-flight mode, arming state, parameter values, gateway ownership or evidence flags.
+flight mode, arming state, parameter values or evidence flags.
 It is separate from the guarded calibration implementation.
 """
 import argparse
@@ -51,7 +51,7 @@ class UncheckedCalibrationNode(Node):
             'monotonic_s', 'trial', 'phase', 'side', 'delta_pwm', 'left_pwm', 'right_pwm'))
         self.log.writeheader()
         self.get_logger().warning(
-            'UNCHECKED PWM sequence: no vehicle, telemetry, GPS, estimator, gateway or evidence checks')
+            'UNCHECKED PWM sequence: no vehicle, telemetry, GPS, estimator, parameter or evidence checks')
         self.get_logger().warning(
             f'Publishing RC channels {self.channels} around neutral {self.neutral} in {self.countdown:.1f} seconds')
 

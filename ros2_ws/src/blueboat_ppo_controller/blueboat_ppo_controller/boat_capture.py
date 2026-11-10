@@ -48,14 +48,15 @@ def capture(directory, profile):
             actual[name] = value.integer_value if value.type == 2 else value.double_value
         differences = {key:dict(expected=value, actual=actual[key]) for key,value in profile['expected_parameters'].items()
                        if abs(actual[key]-value) > 1e-5}
-        identity = {key:getattr(info,key) for key in ('sysid','compid','flight_sw_version','uid')}
+        identity = {key:getattr(info,key) for key in ('sysid','compid','flight_sw_version')}
         snapshot = dict(identity=identity,
-                        identity_basis=('hardware_uid' if info.uid else 'system_component_firmware_and_parameters'),
+                        identity_basis='system_component_firmware_and_parameters',
                         actual_parameters=actual, parameter_differences=differences,
                         note='Read-only MAVROS capture. No parameters written, motors commanded, or tests marked passed.')
         filename = directory/f'live-capture-{time.time_ns()}.json'
         write_json(filename, snapshot)
         version = info.flight_sw_version
+        profile.pop('uid', None)
         profile.update(identity, firmware_version=f'ArduRover {version >> 24}.{(version >> 16) & 255}.{(version >> 8) & 255} (type {version & 255}, captured)',
                        verified=False, **{key:False for key in CHECKS})
         write_json(directory/'motor_interface.json', profile)

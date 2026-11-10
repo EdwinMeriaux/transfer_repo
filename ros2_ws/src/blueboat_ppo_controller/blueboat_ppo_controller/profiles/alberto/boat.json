@@ -11,19 +11,19 @@
     "left_servo_output": 3,
     "rc_neutral_pwm": 1500,
     "forward_above_neutral": true,
-    "manual_takeover": "joystick + GCS (confirmed by user)"
+    "manual_takeover": "operator/QGC path is separate from the Jetson MAVROS connection; verify before powered use"
   },
   "unknown": [
     "actual servo neutral and forward sign",
-    "component ID, encoded firmware version and hardware UID when the flight controller provides one",
+    "component ID and encoded firmware version",
     "IMU offset from COM",
     "mass uncertainty",
     "completed takeover/failsafe/SITL/telemetry tests",
     "measured force or effective-force curves",
-    "network addresses, installed GCS/router versions and completed handoff/ground-loss/router-failure tests"
+    "Jetson-to-Pixhawk UDP endpoint and tested command-loss/manual-takeover behavior"
   ],
   "scope": "Hardware-specific draft; not a SITL identity or measured thrust calibration",
-  "control_authority": "joystick_gcs",
-  "ground_station": "QGroundControl",
-  "router": "MAVProxy"
+  "control_authority": "direct_mavros",
+  "ground_station": "external operator station",
+  "router": "none in PPO command path"
 }

@@ -7,7 +7,6 @@
   "sysid": 1,
   "compid": 1,
   "flight_sw_version": 0,
-  "uid": 0,
   "evidence_file": "measured-calibration.csv",
   "evidence_sha256": "REQUIRED",
   "left_right_verified": false,

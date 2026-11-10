@@ -21,7 +21,7 @@ source /opt/ros/humble/setup.bash
 /usr/bin/python3 -m venv --system-site-packages "$BLUEBOAT_REPO/.venv"
 source "$BLUEBOAT_REPO/.venv/bin/activate"
 python -m pip install -r "$BLUEBOAT_REPO/requirements.txt"
-python -m pip install "$BLUEBOAT_PACKAGE[calibration,handoff]"
+python -m pip install "$BLUEBOAT_PACKAGE[calibration]"
 python -c 'import rclpy, mavros_msgs.msg, onnxruntime'
 cd "$BLUEBOAT_WORKSPACE"
 python -m colcon build --symlink-install --packages-select blueboat_ppo_controller

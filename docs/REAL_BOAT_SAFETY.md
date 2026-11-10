@@ -1,8 +1,6 @@
 # Calibration and real-boat acceptance
 
-**Alberto's QGroundControl/MAVProxy installation:** use [GCS_HANDOFF.md](GCS_HANDOFF.md) and [ALBERTO_BOAT.md](ALBERTO_BOAT.md). The receiver/switch requirements below describe the generic `rc_receiver` path. For `joystick_gcs`, a fresh authenticated ground grant replaces that switch, and PWM requests go through a local Unix socket to the exclusive MAVLink gateway. The gateway owns neutral/HOLD/release on faults; MAVROS is telemetry/read-only. All measurement, telemetry, evidence and calibration limits still apply.
-
-The implemented powered path below assumes a physical RC receiver. Alberto’s joystick/GCS authority is explicitly blocked pending [a separate handoff integration](GCS_HANDOFF.md); do not add a receiver or change his receiver-related parameters merely to satisfy this path.
+**Alberto's installation:** use [ALBERTO_BOAT.md](ALBERTO_BOAT.md). Its `direct_mavros` path publishes from the Jetson directly to `/mavros/rc/override`; it has no custom gateway or ownership grant. The receiver/switch requirements below apply only to the generic `rc_receiver` path. Direct MAVROS instead requires one command source, stopped QGC joystick transmission, explicit ROS enable, tested operator takeover and independent flight-controller timeout/failsafe behavior.
 
 Physical actuation is disabled by default. The shipped calibration is intentionally incomplete and cannot enable actuator mode. This repository has no physical BlueBoat measurements and no completed ArduPilot SITL trial. ONNX/Gazebo agreement alone does not establish that the motor/estimator/network path works on hardware.
 
@@ -20,7 +18,7 @@ For the separate IMU-based effective-response workflow, use [THRUST_CALIBRATION.
 
 Copy `config/calibration.template.json` into an ignored local `artifacts/calibration/` directory. Keep `verified: false` until all evidence is collected. The numbers 1/3/7 in the template are **candidate channel locations**, not verified wiring. No force/PWM samples or neutral values are supplied.
 
-1. Save the vehicle's firmware version, `flight_sw_version`, UID when supplied, sysid/compid, complete parameter dump, MAVROS version and SITL/Gazebo plugin revisions. Alberto's current FC/MAVROS path reports `uid=0`; that recorded unavailable value is accepted only with exact system/component, firmware, vehicle type and pinned parameter checks. Use `/mavros/vehicle_info_get`; the human-readable version label alone is insufficient.
+1. Save the vehicle's firmware version, `flight_sw_version`, sysid/compid, complete parameter dump, MAVROS version and SITL/Gazebo plugin revisions. UID is not used. Use `/mavros/vehicle_info_get`; the human-readable version label alone is insufficient.
 2. With propulsion safely isolated, establish port/starboard identity, propeller directions, RC input mapping, servo output assignments, reversals, receiver trims and a separate physical RC override-enable switch. Confirm neutral and manual control. Do not use a software Bool as the sole takeover mechanism.
 3. On SITL, measure **RC-input PWM → actual Gazebo applied thrust**, through the complete MAVROS/ArduRover/plugin chain. Servo output alone is insufficient if the plugin maps it nonlinearly. On hardware, measure thrust on a suitable restrained, water-cooled test arrangement with the actual ESCs, propellers, battery voltage and payload. Never infer thrust from nominal PWM limits or copy the synthetic test fixture.
 4. For each side record monotonic `[force_N, rc_input_pwm]` points covering −15 to +25 N, including an explicitly measured zero-force neutral. Include both directions, deadband, uncertainty and repeatability. The current adapter requires full-range evidence even if the deployment cap is low; if that evidence cannot be safely collected, remain in shadow. PWM-equivalent RC commands must lie within 1000–2000. Increasing or decreasing curves are supported, but the mapping and reversal must be measured.
@@ -45,7 +43,7 @@ Mode selection must not share either owned motor input or the enable switch. Tes
 
 - Inference test: no ROS and no motor path.
 - Shadow: full telemetry and model; no RC override publisher.
-- Actuator: explicit mode + enable flag + verified calibration + matching vehicle/parameters + healthy telemetry/estimator + fresh command + armed MANUAL + physical switch + fresh enable heartbeat.
+- Actuator: explicit mode + enable flag + verified calibration + matching vehicle/parameters + healthy telemetry/estimator + fresh command + armed MANUAL + fresh enable heartbeat. `rc_receiver` additionally requires its physical switch; `direct_mavros` requires exclusive command publication and stopped QGC joystick output.
 - Before first valid output, failures simply block output. After output begins, faults latch until node restart; refreshing a heartbeat does not silently resume thrust.
 - Telemetry/command/inference/parameter faults send measured neutral for approximately 0.1 s, then release only the two owned RC inputs. A 0.1 s control-loop watchdog runs in a separate thread; a hung inference call cannot publish a late action after the fault is latched.
 - Physical takeover, enable release, mode change or disarming immediately releases owned RC inputs. Normal SIGINT/SIGTERM keeps ROS alive long enough to attempt neutral and release before shutdown. Neutral and release are best-effort messages, not acknowledgments of stopped motors.

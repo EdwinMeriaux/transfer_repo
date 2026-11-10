@@ -7,7 +7,6 @@
   "sysid": 1,
   "compid": null,
   "flight_sw_version": null,
-  "uid": null,
   "evidence_file": "",
   "evidence_sha256": "",
   "left_right_verified": false,
@@ -107,12 +106,5 @@
   "imu_placement_verified": false,
   "sitl_calibration_test_passed": false,
   "output_feedback_unavailable_accepted": false,
-  "control_authority": "joystick_gcs",
-  "gcs_gateway_file": "",
-  "gcs_gateway_sha256": "",
-  "gcs_handoff_tested": false,
-  "gcs_ground_loss_tested": false,
-  "gcs_no_bypass_verified": false,
-  "gcs_heartbeat_isolation_tested": false,
-  "gcs_router_failure_tested": false
+  "control_authority": "direct_mavros"
 }

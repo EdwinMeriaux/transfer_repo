@@ -1,0 +1,39 @@
+{
+  "date": "2026-11-10",
+  "branch": "alberto/simple-field-scripts",
+  "baseline_commit": "cc2c7545d2fd7db05be569253db371bdd00c2f9b",
+  "architecture": "Jetson MAVROS publishes directly to the Pixhawk; QGroundControl remains on the separate laptop/Wi-Fi/BlueOS path",
+  "identity": "sysid, compid, encoded firmware, vehicle type and pinned parameters; hardware UID is not captured or compared",
+  "removed": [
+    "custom MAVLink gateway",
+    "ground-owner key and grant client",
+    "gateway configuration and handoff flags",
+    "gateway Python dependency and console entry points"
+  ],
+  "pytest": {
+    "passed": 120,
+    "skipped": 4,
+    "skip_reason": "Three opt-in live SITL tests and real ROS serialization are unavailable on the development Mac"
+  },
+  "focused_tests": {
+    "passed": 75,
+    "scope": "capture/profile migration, safety, direct PPO transport and direct powered-calibration transport"
+  },
+  "package_check": "Fresh wheel contains no deleted gateway modules or gateway/owner entry points",
+  "other_checks": [
+    "Python compileall",
+    "all shell scripts pass bash -n",
+    "repository JSON parses",
+    "local Markdown links resolve",
+    "git diff --check"
+  ],
+  "not_executed": [
+    "ROS 2 Humble serialization on Ubuntu",
+    "live ArduPilot SITL command path",
+    "Jetson-to-Pixhawk MAVROS actuation",
+    "QGroundControl coexistence and manual takeover",
+    "physical PWM or real-water tests"
+  ],
+  "flight_controller_settings_changed": false,
+  "policy_or_training_changed": false
+}

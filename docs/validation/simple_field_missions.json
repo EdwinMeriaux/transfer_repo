@@ -45,5 +45,5 @@
     "maximum_abs_roll_rad": 0.00922091767221156,
     "maximum_abs_pitch_rad": 0.08378344874179966
   },
-  "scope": "Validates relative-distance path control and the ONNX-to-Gazebo force pathway. It does not validate ROS serialization, MAVROS, ArduRover, gateway arbitration, PWM calibration or physical deployment."
+  "scope": "Validates relative-distance path control and the ONNX-to-Gazebo force pathway. It does not validate ROS serialization, MAVROS, ArduRover, direct Jetson-to-Pixhawk transport, PWM calibration or physical deployment."
 }

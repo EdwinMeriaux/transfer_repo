@@ -40,10 +40,10 @@ def test_bundle_preserves_settings_and_reports_every_known_conflict(bundle):
     assert p['expected_parameters'] == json.loads((BUNDLE/'observed_parameters.json').read_text())
     result = report(bundle)
     assert not result['powered_ready'] and result['mass_kg'] == 23
-    for conflict in ('MOT_THST_ASYM=1.6','RC_OVERRIDE_TIME=3','Joystick/GCS takeover confirmed'):
+    for conflict in ('MOT_THST_ASYM=1.6','RC_OVERRIDE_TIME=3','FS_ACTION=4'):
         assert any(conflict in message for message in result['blockers'])
     assert p['enable_rc_channel'] is None
-    assert p['control_authority'] == 'joystick_gcs'
+    assert p['control_authority'] == 'direct_mavros'
     assert not any('receiver failsafe is disabled' in message or 'RCn_OPTION=46' in message for message in result['blockers'])
     assert all(p[key] is False for key in CHECKS)
 
@@ -70,8 +70,8 @@ def test_real_parameter_subset_can_be_reimported_and_preserves_evidence(tmp_path
     main(['--directory',str(bundle),'refresh','--params',str(file)])
     p=json.loads((bundle/'motor_interface.json').read_text())
     assert p['expected_parameters']==values and p['enable_rc_channel'] is None
-    assert p['control_authority']=='joystick_gcs'
-    assert not p['verified'] and p['uid'] is None and p['left']['servo_neutral_pwm'] is None
+    assert p['control_authority']=='direct_mavros'
+    assert not p['verified'] and 'uid' not in p and p['left']['servo_neutral_pwm'] is None
     assert next(bundle.glob('motor_interface.before-refresh-*')).read_text()==old
     assert json.loads((bundle/'boat.json').read_text())['parameter_export_sha256']==hashlib.sha256(file.read_bytes()).hexdigest()
     assert report(bundle)['powered_ready'] is False
@@ -127,7 +127,7 @@ def test_capture_reads_services_only_and_never_approves(bundle,monkeypatch):
     from blueboat_ppo_controller.boat_capture import capture
     profile=json.loads((bundle/'motor_interface.json').read_text())
     calls=[]
-    info=S(available_info=3,autopilot=3,type=11,sysid=1,compid=1,flight_sw_version=0x040602ff,uid=0)
+    info=S(available_info=3,autopilot=3,type=11,sysid=1,compid=1,flight_sw_version=0x040602ff)
     replies=[S(success=True,vehicles=[info]),S(success=True),S(values=[S(type=3,double_value=v) for v in profile['expected_parameters'].values()])]
     class Message:
         def __init__(self,**kwargs): self.__dict__.update(kwargs)
@@ -146,14 +146,12 @@ def test_capture_reads_services_only_and_never_approves(bundle,monkeypatch):
     capture(bundle,profile)
     assert calls==['/mavros/vehicle_info_get','/mavros/param/pull','/mavros/param/get_parameters']
     saved=json.loads((bundle/'motor_interface.json').read_text())
-    assert saved['uid']==0 and saved['flight_sw_version']==0x040602ff
+    assert 'uid' not in saved and saved['flight_sw_version']==0x040602ff
     assert saved['verified'] is False and all(saved[k] is False for k in CHECKS)
     assert saved['expected_parameters']==json.loads((BUNDLE/'observed_parameters.json').read_text())
-    status=report(bundle)
-    assert any('reports no hardware UID' in warning for warning in status['warnings'])
-    assert not any('hardware identity: uid' in blocker for blocker in status['blockers'])
     snapshot=json.loads(next(bundle.glob('live-capture-*.json')).read_text())
     assert snapshot['identity_basis']=='system_component_firmware_and_parameters'
+    assert 'reported_uid' not in snapshot
     assert snapshot['parameter_differences']=={}
 
 
@@ -177,28 +175,34 @@ def test_analysis_uses_session_mass_and_checks_routing(bundle,tmp_path,monkeypat
     assert len(measured)==1
 
 
-def test_gcs_flags_do_not_replace_missing_vehicle_evidence(bundle):
+def test_approval_flags_do_not_replace_missing_vehicle_evidence(bundle):
     profile=json.loads((bundle/'motor_interface.json').read_text())
     profile.update(verified=True, **{key:True for key in CHECKS})
     (bundle/'motor_interface.json').write_text(json.dumps(profile))
     with pytest.raises((ValueError, OSError)):
         MotorInterface(bundle/'motor_interface.json','hardware')
     assert not report(bundle)['powered_ready']
-    with pytest.raises(ValueError,match='Joystick/GCS'):
+    with pytest.raises(ValueError,match='MOT_THST_ASYM'):
         command_for_run(bundle,'powered',True)
 
 
-def test_existing_receiver_profile_can_record_confirmed_gcs_source(bundle):
+def test_existing_receiver_profile_can_select_direct_mavros(bundle):
     profile=json.loads((bundle/'motor_interface.json').read_text())
     profile.pop('control_authority')
-    profile.update(enable_rc_channel=7,verified=True)
+    profile.update(enable_rc_channel=7,verified=True,uid=123,gcs_gateway_file='old.json',
+                   gcs_gateway_sha256='deadbeef',gcs_handoff_tested=True,
+                   gcs_ground_loss_tested=True,gcs_no_bypass_verified=True,
+                   gcs_heartbeat_isolation_tested=True,gcs_router_failure_tested=True)
     (bundle/'motor_interface.json').write_text(json.dumps(profile))
-    main(['--directory',str(bundle),'configure','--control-authority','joystick_gcs'])
+    main(['--directory',str(bundle),'configure','--control-authority','direct_mavros'])
     updated=json.loads((bundle/'motor_interface.json').read_text())
-    assert updated['control_authority']=='joystick_gcs' and updated['enable_rc_channel'] is None
+    assert updated['control_authority']=='direct_mavros' and updated['enable_rc_channel'] is None
+    assert not any(key in updated for key in ('uid','gcs_gateway_file','gcs_gateway_sha256','gcs_handoff_tested',
+                                               'gcs_ground_loss_tested','gcs_no_bypass_verified',
+                                               'gcs_heartbeat_isolation_tested','gcs_router_failure_tested'))
     assert not updated['verified']
     assert updated['expected_parameters']==profile['expected_parameters']
-    assert json.loads((bundle/'boat.json').read_text())['control_authority']=='joystick_gcs'
+    assert json.loads((bundle/'boat.json').read_text())['control_authority']=='direct_mavros'
     with pytest.raises(SystemExit):
         main(['--directory',str(bundle),'configure','--enable-rc-channel','7'])
 

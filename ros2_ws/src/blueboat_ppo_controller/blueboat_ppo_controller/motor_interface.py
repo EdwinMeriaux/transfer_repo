@@ -11,7 +11,7 @@ class MotorInterface:
         path = Path(path)
         config = json.loads(path.read_text())
         self.authority = config.get('control_authority', 'rc_receiver')
-        if self.authority not in ('rc_receiver', 'joystick_gcs'):
+        if self.authority not in ('rc_receiver', 'direct_mavros'):
             raise ValueError('Unknown control authority: ' + str(self.authority))
         if config.get('schema') != 1 or config.get('verified') is not True or config.get('target') != target:
             raise ValueError('Actuation requires a verified motor interface for this deployment target')
@@ -21,18 +21,15 @@ class MotorInterface:
         if hashlib.sha256(evidence.read_bytes()).hexdigest() != config['evidence_sha256']:
             raise ValueError('Calibration evidence checksum mismatch')
         checks = ['left_right_verified', 'neutral_verified', 'manual_takeover_tested', 'override_timeout_tested', 'gcs_failsafe_tested', 'paired_motor_test_passed']
-        if self.authority == 'joystick_gcs' and target == 'hardware':
-            checks += ['gcs_handoff_tested', 'gcs_ground_loss_tested', 'gcs_no_bypass_verified', 'gcs_heartbeat_isolation_tested', 'gcs_router_failure_tested']
         if target == 'hardware':
             checks += ['sitl_test_passed', 'restrained_motor_test_passed']
         if not all(config.get(key) is True for key in checks):
             raise ValueError('Required calibration and failsafe tests are unverified')
-        for key in ('sysid', 'compid', 'flight_sw_version', 'uid'):
+        for key in ('sysid', 'compid', 'flight_sw_version'):
             if type(config.get(key)) is not int or config[key] < 0:
                 raise ValueError('Missing verified vehicle identity: ' + key)
         if not 1 <= config['sysid'] <= 255 or not 1 <= config['compid'] <= 255 or config['flight_sw_version'] == 0:
             raise ValueError('Actual system, component and firmware identity are required')
-        self.uid_available = config['uid'] != 0
         self.config = config
         self.channels = [config[name]['rc_channel'] for name in ('left', 'right')]
         if any(type(channel) is not int or not 1 <= channel <= 8 for channel in self.channels) or len(set(self.channels)) != 2:
@@ -48,20 +45,12 @@ class MotorInterface:
         fixed = {'MANUAL_STR_EXPO': 0, 'MANUAL_OPTIONS': 0, 'MOT_THST_ASYM': 1, 'PILOT_STEER_TYPE': 1, 'RCMAP_ROLL': self.channels[0], 'RCMAP_THROTTLE': self.channels[1]}
         if self.authority == 'rc_receiver':
             fixed[f'RC{self.enable_channel}_OPTION'] = 46
-        else:
+        elif self.authority == 'direct_mavros':
             if self.enable_channel is not None:
-                raise ValueError('GCS authority does not use a physical receiver enable channel')
-            from .authority import gateway_config
-            config_path = path.parent / config.get('gcs_gateway_file', '')
-            gateway = gateway_config(config_path)
-            if gateway['config_sha256'] != config.get('gcs_gateway_sha256'):
-                raise ValueError('Gateway configuration checksum mismatch')
-            config['gcs_gateway_file'] = str(config_path.resolve())
-            if gateway['vehicle_system'] != config['sysid'] or gateway['vehicle_component'] != config['compid']:
-                raise ValueError('Gateway targets a different vehicle')
-            fixed.update(SYSID_MYGCS=gateway['gcs_system'], SYSID_THISMAV=config['sysid'], SYSID_ENFORCE=0)
+                raise ValueError('Direct MAVROS authority does not use a receiver enable channel')
+            fixed.update(SYSID_THISMAV=config['sysid'])
             if self.expected.get('FS_ACTION') not in (2, 5):
-                raise ValueError('GCS gateway requires a tested Hold (FS_ACTION=2) or Terminate (5) fallback; RTL may command movement')
+                raise ValueError('Direct MAVROS requires a tested Hold (FS_ACTION=2) or Terminate (5) fallback; RTL may command movement')
             for key in ('FS_GCS_TIMEOUT', 'FS_TIMEOUT'):
                 if not np.isfinite(self.expected.get(key, float('nan'))) or self.expected[key] <= 0:
                     raise ValueError('Pin positive tested GCS failsafe timing: ' + key)
@@ -103,4 +92,4 @@ class MotorInterface:
 
 
     def verify_vehicle(self, info):
-        return bool(info.available_info & 2) and info.autopilot == 3 and info.type in (10, 11) and all(getattr(info, key) == self.config[key] for key in ('sysid', 'compid', 'flight_sw_version', 'uid'))
+        return bool(info.available_info & 2) and info.autopilot == 3 and info.type in (10, 11) and all(getattr(info, key) == self.config[key] for key in ('sysid', 'compid', 'flight_sw_version'))
