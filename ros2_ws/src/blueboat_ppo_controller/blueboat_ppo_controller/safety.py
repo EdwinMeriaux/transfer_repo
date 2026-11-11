@@ -1,6 +1,22 @@
 import math
 
 
+def autopilot_status_reason(system_status):
+    """Return a diagnostic for a connected FC that is not standby/active."""
+    if system_status in (3, 4):
+        return None
+    names = {
+        0: 'uninitialized',
+        1: 'booting',
+        2: 'calibrating',
+        5: 'critical',
+        6: 'emergency',
+        7: 'poweroff',
+        8: 'flight_termination',
+    }
+    return 'autopilot_' + names.get(system_status, 'system_status_' + str(system_status))
+
+
 class SafetyGate:
     def __init__(self, mode='shadow', telemetry_timeout=.2, command_timeout=.5, watchdog_timeout=.1):
         if mode not in ('shadow', 'actuator'):
@@ -17,7 +33,8 @@ class SafetyGate:
         self.closed = False
 
 
-    def check(self, now, receipts, connected, armed, vehicle_mode, enabled, rc_enabled, parameters_valid, authority_valid=None):
+    def check(self, now, receipts, connected, armed, vehicle_mode, enabled, rc_enabled,
+              parameters_valid, authority_valid=None, system_status=None):
         if self.closed:
             return 'shutdown'
         if self.fault:
@@ -30,6 +47,10 @@ class SafetyGate:
             return 'command_timeout'
         if not connected or not 0 <= now - receipts.get('state', -math.inf) <= 2.:
             return 'autopilot_disconnected'
+        if system_status is not None:
+            reason = autopilot_status_reason(system_status)
+            if reason:
+                return reason
         if self.mode == 'actuator':
             if not armed or vehicle_mode != 'MANUAL':
                 return 'manual_takeover_or_disarmed'

@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from blueboat_ppo_controller.motor_adapter import MotorAdapter
 from blueboat_ppo_controller.mavros_interface import rc_override, telemetry_from_messages
-from blueboat_ppo_controller.safety import SafetyGate
+from blueboat_ppo_controller.safety import SafetyGate, autopilot_status_reason
 
 
 def test_motor_order_and_release(calibration):
@@ -75,6 +75,18 @@ def test_freshness_fault_latch_and_shutdown():
 def test_shadow_does_not_require_actuation_enable():
     gate=SafetyGate('shadow')
     assert gate.check(1.,dict(odometry=1.,imu=1.,command=1.,state=1.),True,False,'HOLD',False,False,False) is None
+
+
+def test_autopilot_status_is_distinct_from_connection_loss():
+    gate=SafetyGate('shadow')
+    receipts=dict(odometry=1.,imu=1.,command=1.,state=1.)
+    args=(1.,receipts,True,False,'HOLD',False,False,False)
+    assert gate.check(*args,system_status=4) is None
+    assert gate.check(*args,system_status=5)=='autopilot_critical'
+    assert gate.check(*args,system_status=2)=='autopilot_calibrating'
+    assert gate.check(1.,receipts,False,False,'HOLD',False,False,False,
+                      system_status=5)=='autopilot_disconnected'
+    assert autopilot_status_reason(99)=='autopilot_system_status_99'
 
 
 def test_message_frame_and_validity_contract():

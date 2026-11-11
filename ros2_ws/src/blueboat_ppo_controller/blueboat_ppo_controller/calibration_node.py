@@ -21,6 +21,7 @@ from rcl_interfaces.srv import GetParameters
 
 from .mavros_interface import rc_override
 from .motor_interface import MotorInterface
+from .safety import autopilot_status_reason
 from .thrust_calibration import PulsePlan, Recorder, RestCheck, StreamCheck
 
 
@@ -348,8 +349,11 @@ class CalibrationNode(Node):
         if not self.motor:
             return None
         vehicle = self.vehicle
-        if not vehicle or not vehicle.connected or vehicle.system_status not in (3, 4) or not 0 <= now-self.receipts.get('state', -np.inf) <= 2.:
-            return 'autopilot_disconnected_or_failsafe'
+        if not vehicle or not vehicle.connected or not 0 <= now-self.receipts.get('state', -np.inf) <= 2.:
+            return 'autopilot_disconnected'
+        reason = autopilot_status_reason(vehicle.system_status)
+        if reason:
+            return reason
         if not vehicle.armed or vehicle.mode != 'MANUAL':
             return 'manual_takeover_or_disarmed'
         checks = [('enable', self.enabled)]

@@ -216,7 +216,12 @@ class PPONode(Node):
     def permission(self, now):
         vehicle = self.vehicle
         direct = bool(self.motor and self.motor.authority == 'direct_mavros')
-        reason = self.gate.check(now, self.receipts, bool(vehicle and vehicle.connected and vehicle.system_status in (3, 4)), bool(vehicle and vehicle.armed), vehicle.mode if vehicle else '', self.enabled, self.rc_enabled, self.parameters_valid, True if direct else None)
+        reason = self.gate.check(
+            now, self.receipts, bool(vehicle and vehicle.connected),
+            bool(vehicle and vehicle.armed), vehicle.mode if vehicle else '',
+            self.enabled, self.rc_enabled, self.parameters_valid,
+            True if direct else None,
+            vehicle.system_status if vehicle else None)
         if reason:
             return reason
         if self.motor and not self.vehicle_verified:
