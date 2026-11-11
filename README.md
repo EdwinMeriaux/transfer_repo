@@ -128,6 +128,19 @@ ros2 topic pub --once /blueboat/calibration/enable std_msgs/msg/Bool '{data: fal
 
 See [thrust calibration](docs/THRUST_CALIBRATION.md) for the measurement and acceptance requirements.
 
+After a completed physical calibration, Alberto can run the local analysis,
+review, finalization, checksum update and structural validation as one step:
+
+```bash
+./scripts/04_calibration_to_json.sh
+```
+
+The script locates the newest completed session, creates a timestamped report,
+waits for the explicit `APPROVE` review acknowledgement, and writes the final
+path to `~/.config/blueboat/alberto/latest_ppo_calibration.txt`. It refuses an
+incomplete run, missing branches, failed paired validation, inadequate 3 N
+coverage or an invalid final motor adapter.
+
 ## PPO field routes
 
 After a reviewed physical calibration JSON exists, use three terminals. There is no gateway process or QGC grant command.
