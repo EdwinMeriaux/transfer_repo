@@ -34,13 +34,31 @@ class PPONode(Node):
             rc_override_topic='/mavros/rc/override',
             vehicle_info_service='/mavros/vehicle_info_get', param_pull_service='/mavros/param/pull', param_get_service='/mavros/param/get_parameters',
             forces_topic='/blueboat/requested_forces', diagnostics_topic='/blueboat/diagnostics', observation_topic='/blueboat/observation',
-            world_frame='map', body_frame='base_link', telemetry_timeout_s=.2, command_timeout_s=.5, watchdog_timeout_s=.1, log_directory='')
+            world_frame='map', body_frame='base_link', telemetry_timeout_s=.2, command_timeout_s=.5, watchdog_timeout_s=.1,
+            state_timeout_s=2., enable_timeout_s=.5, rc_timeout_s=.5, parameter_timeout_s=15., estimator_timeout_s=2.,
+            max_telemetry_skew_s=.1, timestamp_future_tolerance_s=0., log_directory='')
         for name, value in defaults.items():
             self.declare_parameter(name, value)
         self.settings = {name: self.get_parameter(name).value for name in defaults}
+        target = self.settings['deployment_target']
+        if target not in ('sitl', 'hardware'):
+            raise ValueError('deployment_target must be sitl or hardware')
+        positive_timing = [self.settings[name] for name in (
+            'estimator_timeout_s', 'max_telemetry_skew_s')]
+        future_tolerance = self.settings['timestamp_future_tolerance_s']
+        if (not np.isfinite(positive_timing + [future_tolerance]).all()
+                or any(value <= 0 for value in positive_timing)
+                or future_tolerance < 0):
+            raise ValueError('Invalid telemetry timing setting')
+        if target == 'hardware' and self.settings['timestamp_future_tolerance_s'] != 0:
+            raise ValueError('Hardware forbids future source timestamp tolerance')
         self.runtime = PolicyRuntime(self.settings['model_directory'] or None)
         self.adapter = ObservationAdapter(self.runtime.contract)
-        self.gate = SafetyGate(self.settings['mode'], self.settings['telemetry_timeout_s'], self.settings['command_timeout_s'], self.settings['watchdog_timeout_s'])
+        self.gate = SafetyGate(
+            self.settings['mode'], self.settings['telemetry_timeout_s'],
+            self.settings['command_timeout_s'], self.settings['watchdog_timeout_s'],
+            self.settings['state_timeout_s'], self.settings['enable_timeout_s'],
+            self.settings['rc_timeout_s'], self.settings['parameter_timeout_s'])
         self.motor = None
         self.output = None
         if self.gate.mode == 'actuator':
@@ -85,8 +103,31 @@ class PPONode(Node):
         self.get_logger().info(f'Controller mode={self.gate.mode}; no automatic arming or flight-mode changes')
 
 
+    def timing_snapshot(self, monotonic_now, ros_now):
+        receipt_age = {
+            name: monotonic_now - receipt
+            for name, receipt in self.receipts.items()
+            if np.isfinite(receipt) and monotonic_now >= receipt
+        }
+        source_age = {
+            name: ros_now - stamp
+            for name, stamp in self.stamps.items()
+            if np.isfinite(stamp)
+        }
+        timing = dict(receipt_age_s=receipt_age, source_age_s=source_age)
+        if 'imu' in self.stamps and 'odometry' in self.stamps:
+            timing['imu_odometry_skew_s'] = abs(
+                self.stamps['imu'] - self.stamps['odometry'])
+        return timing
+
+
     def record(self, status, **values):
-        row = dict(monotonic_s=time.monotonic(), ros_time_s=self.get_clock().now().nanoseconds / 1e9, mode=self.gate.mode, status=status, **values)
+        monotonic_now = time.monotonic()
+        ros_now = self.get_clock().now().nanoseconds / 1e9
+        row = dict(monotonic_s=monotonic_now, ros_time_s=ros_now,
+                   mode=self.gate.mode, deployment_target=self.settings['deployment_target'],
+                   status=status, timing=self.timing_snapshot(monotonic_now, ros_now),
+                   **values)
         payload = json.dumps(row, allow_nan=False)
         self.log.write(payload + '\n')
         self.diagnostics.publish(String(data=payload))
@@ -98,7 +139,9 @@ class PPONode(Node):
     def accept_stamp(self, name, message):
         stamp = message.header.stamp.sec + message.header.stamp.nanosec / 1e9
         age = self.get_clock().now().nanoseconds / 1e9 - stamp
-        if not 0 <= age <= self.gate.telemetry_timeout or stamp <= self.stamps.get(name, -1):
+        future_tolerance = self.settings['timestamp_future_tolerance_s']
+        if (not -future_tolerance <= age <= self.gate.telemetry_timeout
+                or stamp <= self.stamps.get(name, -1)):
             self.receipts.pop(name, None)
             raise ValueError(name + ' has stale, repeated or future source timestamp')
         self.stamps[name] = stamp
@@ -227,12 +270,16 @@ class PPONode(Node):
         if self.motor and not self.vehicle_verified:
             return 'vehicle_identity_unverified'
         ros_now = self.get_clock().now().nanoseconds / 1e9
-        if any(not 0 <= ros_now - self.stamps[name] <= self.gate.telemetry_timeout for name in ('imu', 'odometry')):
+        future_tolerance = self.settings['timestamp_future_tolerance_s']
+        if any(not -future_tolerance <= ros_now - self.stamps[name] <= self.gate.telemetry_timeout
+               for name in ('imu', 'odometry')):
             return 'source_telemetry_stale'
         if (self.settings['require_estimator_status']
-                and (not self.estimator_valid or not 0 <= now - self.receipts.get('estimator', -np.inf) <= 2.)):
+                and (not self.estimator_valid
+                     or not 0 <= now - self.receipts.get('estimator', -np.inf)
+                     <= self.settings['estimator_timeout_s'])):
             return 'estimator_invalid_or_stale'
-        if abs(self.stamps['imu'] - self.stamps['odometry']) > .1:
+        if abs(self.stamps['imu'] - self.stamps['odometry']) > self.settings['max_telemetry_skew_s']:
             return 'telemetry_time_skew'
         return None
 

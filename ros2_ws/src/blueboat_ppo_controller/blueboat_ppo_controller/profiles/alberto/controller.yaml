@@ -21,3 +21,14 @@ blueboat_ppo_controller:
     telemetry_timeout_s: 0.2
     command_timeout_s: 0.5
     watchdog_timeout_s: 0.1
+    # Hardware timing remains fail-closed. Characterize the installed system
+    # with scripts/05_hardware_telemetry_characterization.sh before changing
+    # any timeout or skew limit.
+    state_timeout_s: 2.0
+    enable_timeout_s: 0.5
+    rc_timeout_s: 0.5
+    parameter_timeout_s: 15.0
+    estimator_timeout_s: 2.0
+    max_telemetry_skew_s: 0.1
+    # Simulator clock tolerance is never accepted on the hardware target.
+    timestamp_future_tolerance_s: 0.0

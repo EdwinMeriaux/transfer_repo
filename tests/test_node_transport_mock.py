@@ -1,4 +1,5 @@
 import importlib
+import json
 import sys
 import time
 from types import ModuleType, SimpleNamespace as S
@@ -117,6 +118,21 @@ def test_full_shadow_loop_never_creates_actuator_publisher(node_factory):
     np.testing.assert_allclose(np.array(obs)[[53,108]], previous / 10, atol=1e-7)
     node.close()
     assert node.gate.closed and not node.watchdog.is_alive()
+
+
+def test_diagnostics_include_target_and_measured_timing(node_factory):
+    node = node_factory(deployment_target='hardware')
+    node.control()
+    payload = json.loads(node.diagnostics.messages[-1].data)
+    assert payload['deployment_target'] == 'hardware'
+    assert set(payload['timing']['source_age_s']) == {'imu', 'odometry'}
+    assert 'imu_odometry_skew_s' in payload['timing']
+
+
+def test_hardware_rejects_simulator_future_timestamp_tolerance(node_factory):
+    with pytest.raises(ValueError, match='Hardware forbids'):
+        node_factory(deployment_target='hardware',
+                     timestamp_future_tolerance_s=.01)
 
 
 def test_rover_shadow_uses_validated_sources_without_unsupported_estimator_status(node_factory):

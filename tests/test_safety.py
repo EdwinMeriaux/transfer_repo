@@ -72,6 +72,32 @@ def test_freshness_fault_latch_and_shutdown():
     assert gate.check(1.01,**args)=='shutdown'
 
 
+def test_timing_gates_are_configurable_without_disabling_them():
+    gate = SafetyGate(
+        'actuator', telemetry_timeout=.8, command_timeout=.8,
+        watchdog_timeout=.2, state_timeout=3., enable_timeout=.8,
+        rc_timeout=.8, parameter_timeout=20.)
+    receipts = {
+        name: 1. for name in
+        ('odometry', 'imu', 'command', 'state', 'rc', 'enable', 'parameters')
+    }
+    args = dict(receipts=receipts, connected=True, armed=True,
+                vehicle_mode='MANUAL', enabled=True, rc_enabled=True,
+                parameters_valid=True)
+    assert gate.check(1.6, **args) is None
+    receipts['enable'] = .7
+    assert gate.check(1.6, **args) == 'enable_released'
+
+
+@pytest.mark.parametrize('keyword,value', [
+    ('state_timeout', 0.), ('enable_timeout', 1.1),
+    ('rc_timeout', float('nan')), ('parameter_timeout', 61.),
+])
+def test_invalid_configurable_timeout_is_rejected(keyword, value):
+    with pytest.raises(ValueError):
+        SafetyGate(**{keyword: value})
+
+
 def test_shadow_does_not_require_actuation_enable():
     gate=SafetyGate('shadow')
     assert gate.check(1.,dict(odometry=1.,imu=1.,command=1.,state=1.),True,False,'HOLD',False,False,False) is None

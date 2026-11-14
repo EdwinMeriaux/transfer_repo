@@ -52,4 +52,22 @@ Mode selection must not share either owned motor input or the enable switch. Tes
 
 ## Before a pool trial
 
+Run the read-only hardware telemetry characterization while the boat is
+disarmed and propulsion is isolated:
+
+```bash
+cd ~/gazebo_blue_boat
+./scripts/05_hardware_telemetry_characterization.sh 60
+```
+
+This captures simultaneous rates and maximum observed gaps for raw IMU,
+attitude, odometry, RC output and vehicle state. It refuses to run while armed
+or while an RC-override publisher exists. Review its `summary.json` before
+changing the hardware profile's timing values. Rate requests may be shared
+with SITL, but simulator timestamp exceptions may not: hardware requires
+`timestamp_future_tolerance_s: 0.0`. Keep the command, enable, takeover,
+watchdog and parameter gates enabled. Treat increased timeouts as measured
+hardware configuration changes and repeat command-loss/fault-injection tests
+after every change.
+
 Complete real ROS serialization/build tests, shadow logs with measured telemetry age and rate, end-to-end SITL thrust/sign/latency tests, all fault injection and manual takeover checks, Jetson timing under load, restrained hardware calibration, and a controlled low-force trial with a responsible operator and recovery plan. Evaluate GPS/estimator validity in the actual pool environment: if required velocity/orientation estimates are unavailable, the controller must remain blocked. A visual Gazebo success does not resolve that sensor limitation.

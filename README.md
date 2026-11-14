@@ -23,6 +23,12 @@ QGroundControl remains the operator/manual-control path. During PPO or calibrati
 
 The supplied hardware profile intentionally remains blocked for powered operation until the actual neutral/sign measurements, parameter changes and test evidence are reviewed. `status` returning exit code 2 means those blockers still exist; it does not block telemetry, dry-run or shadow mode.
 
+Before adjusting hardware telemetry timing, collect a disarmed read-only
+baseline with `./scripts/05_hardware_telemetry_characterization.sh 60`. The
+hardware profile exposes timing thresholds separately and logs receipt ages,
+source ages and IMU/odometry skew. Simulator clock tolerances remain forbidden
+for `deployment_target: hardware`.
+
 ## Install on Ubuntu 22.04
 
 ROS 2 Humble, MAVROS and the existing Pixhawk connection must already be installed. Use system Python 3.10.

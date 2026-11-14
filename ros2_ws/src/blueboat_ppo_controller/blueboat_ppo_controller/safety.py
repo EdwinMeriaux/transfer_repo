@@ -18,15 +18,25 @@ def autopilot_status_reason(system_status):
 
 
 class SafetyGate:
-    def __init__(self, mode='shadow', telemetry_timeout=.2, command_timeout=.5, watchdog_timeout=.1):
+    def __init__(self, mode='shadow', telemetry_timeout=.2, command_timeout=.5,
+                 watchdog_timeout=.1, state_timeout=2., enable_timeout=.5,
+                 rc_timeout=.5, parameter_timeout=15.):
         if mode not in ('shadow', 'actuator'):
             raise ValueError('Mode must be shadow or actuator')
-        if not all(math.isfinite(v) and 0 < v <= 1 for v in (telemetry_timeout, command_timeout, watchdog_timeout)):
+        fast_timeouts = (telemetry_timeout, command_timeout, watchdog_timeout,
+                         enable_timeout, rc_timeout)
+        slow_timeouts = (state_timeout, parameter_timeout)
+        if (not all(math.isfinite(v) and 0 < v <= 1 for v in fast_timeouts)
+                or not all(math.isfinite(v) and 0 < v <= 60 for v in slow_timeouts)):
             raise ValueError('Invalid safety timeout')
         self.mode = mode
         self.telemetry_timeout = telemetry_timeout
         self.command_timeout = command_timeout
         self.watchdog_timeout = watchdog_timeout
+        self.state_timeout = state_timeout
+        self.enable_timeout = enable_timeout
+        self.rc_timeout = rc_timeout
+        self.parameter_timeout = parameter_timeout
         self.last_loop = None
         self.active = False
         self.fault = None
@@ -45,7 +55,7 @@ class SafetyGate:
                 return name + '_timeout'
         if not 0 <= now - receipts.get('command', -math.inf) <= self.command_timeout:
             return 'command_timeout'
-        if not connected or not 0 <= now - receipts.get('state', -math.inf) <= 2.:
+        if not connected or not 0 <= now - receipts.get('state', -math.inf) <= self.state_timeout:
             return 'autopilot_disconnected'
         if system_status is not None:
             reason = autopilot_status_reason(system_status)
@@ -54,14 +64,14 @@ class SafetyGate:
         if self.mode == 'actuator':
             if not armed or vehicle_mode != 'MANUAL':
                 return 'manual_takeover_or_disarmed'
-            if not enabled or not 0 <= now - receipts.get('enable', -math.inf) <= .5:
+            if not enabled or not 0 <= now - receipts.get('enable', -math.inf) <= self.enable_timeout:
                 return 'enable_released'
             if authority_valid is None:
-                if not rc_enabled or not 0 <= now - receipts.get('rc', -math.inf) <= .5:
+                if not rc_enabled or not 0 <= now - receipts.get('rc', -math.inf) <= self.rc_timeout:
                     return 'manual_takeover'
             elif not authority_valid:
                 return 'gcs_authority_lost'
-            if not parameters_valid or not 0 <= now - receipts.get('parameters', -math.inf) <= 15.:
+            if not parameters_valid or not 0 <= now - receipts.get('parameters', -math.inf) <= self.parameter_timeout:
                 return 'parameters_unverified'
         return None
 
