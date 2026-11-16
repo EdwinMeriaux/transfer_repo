@@ -23,7 +23,7 @@ class PulsePlan:
                 or type(repeats) is not int or not 1 <= repeats <= 20
                 or not 0 < max_delta_pwm <= 250
                 or not all(math.isfinite(x) for x in (baseline_s, pulse_s, recovery_s))
-                or baseline_s < 1 or not .1 <= pulse_s <= 1 or recovery_s < 1):
+                or baseline_s < 1 or not .1 <= pulse_s <= 3 or recovery_s < 1):
             raise ValueError('Invalid bounded pulse plan')
         self.trials = [Pulse(side, delta, repeat) for repeat in range(repeats)
                        for delta in deltas for side in sides]

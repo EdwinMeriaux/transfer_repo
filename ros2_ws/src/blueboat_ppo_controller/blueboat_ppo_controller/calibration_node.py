@@ -49,12 +49,13 @@ class CalibrationNode(Node):
             vehicle_info_service='/mavros/vehicle_info_get', param_pull_service='/mavros/param/pull',
             param_get_service='/mavros/param/get_parameters', telemetry_timeout_s=.2, max_skew_s=.05,
             max_gap_s=.15, min_raw_rate_hz=40., min_attitude_rate_hz=20., min_velocity_rate_hz=10.,
-            min_output_rate_hz=1.8, output_timeout_s=.65, output_max_gap_s=.65,
+            min_output_rate_hz=.8, output_timeout_s=1.25, output_max_gap_s=1.2,
+            output_rate_window_s=3.,
             require_output_feedback=True, watchdog_timeout_s=.1,
             baseline_s=2., rest_duration_s=1., rest_max_gap_s=.06,
-            pulse_s=1., recovery_s=3., repeats=3, delta_pwm=[-40, -60, 40, 60],
+            pulse_s=2., recovery_s=3., repeats=3, delta_pwm=[-40, -60, 40, 60],
             sides=['left', 'right', 'symmetric'], max_delta_pwm=60, dry_run_neutral_pwm=[1500, 1500],
-            output_neutral_tolerance_pwm=15, output_response_grace_s=.65,
+            output_neutral_tolerance_pwm=15, output_response_grace_s=1.25,
             output_min_response_pwm=3, accelerometer_semantics='specific_force',
             max_live_speed_m_s=.3, max_live_angular_rate_rad_s=.25, max_live_tilt_rad=.2)
         for name, value in defaults.items():
@@ -65,14 +66,17 @@ class CalibrationNode(Node):
             raise ValueError('Invalid calibration mode or velocity type')
         positive = ('telemetry_timeout_s', 'max_skew_s', 'max_gap_s', 'min_raw_rate_hz', 'min_attitude_rate_hz',
                     'min_velocity_rate_hz', 'min_output_rate_hz', 'output_timeout_s', 'output_max_gap_s',
+                    'output_rate_window_s',
                     'watchdog_timeout_s', 'max_live_speed_m_s',
                     'max_live_angular_rate_rad_s', 'max_live_tilt_rad', 'output_response_grace_s')
         if any(not np.isfinite(s[k]) or s[k] <= 0 for k in positive) or not 0 < s['watchdog_timeout_s'] <= .2:
             raise ValueError('Invalid telemetry or watchdog thresholds')
         if not 0 < s['telemetry_timeout_s'] <= .5 or not 0 < s['max_skew_s'] <= .1:
             raise ValueError('Unsafe timestamp limits')
-        if not 0 < s['output_timeout_s'] <= .75 or not 0 < s['output_max_gap_s'] <= .75:
+        if not 0 < s['output_timeout_s'] <= 1.3 or not 0 < s['output_max_gap_s'] <= 1.2:
             raise ValueError('Unsafe output-feedback timing limits')
+        if not 2.2 <= s['output_rate_window_s'] <= 5.:
+            raise ValueError('Output rate window must cover at least two maximum gaps')
         if not np.isfinite(s['mass_kg']) or s['mass_kg'] < 0:
             raise ValueError('Mass must be finite and nonnegative; powered mode requires measured mass >0')
         if type(s['output_neutral_tolerance_pwm']) is not int or not 0 <= s['output_neutral_tolerance_pwm'] <= 50:
@@ -118,7 +122,8 @@ class CalibrationNode(Node):
         self.lock = threading.RLock()
         self.streams = {key: StreamCheck(s['telemetry_timeout_s'], s['max_gap_s'])
                         for key in ('raw', 'attitude', 'velocity')}
-        self.streams['output'] = StreamCheck(s['output_timeout_s'], s['output_max_gap_s'])
+        self.streams['output'] = StreamCheck(
+            s['output_timeout_s'], s['output_max_gap_s'], s['output_rate_window_s'])
         self.latest, self.receipts = {}, {}
         self.vehicle = None
         self.enabled = self.rc_enabled = False
