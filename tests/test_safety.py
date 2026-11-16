@@ -36,6 +36,35 @@ def test_calibration_limits_and_identity(calibration):
     with pytest.raises(ValueError): MotorAdapter(calibration,'hardware')
 
 
+def test_asymmetric_deployment_limits(calibration):
+    c=json.loads(calibration.read_text())
+    c.pop('maximum_abs_force_N')
+    c.update(minimum_force_N=-7., maximum_force_N=20.)
+    calibration.write_text(json.dumps(c))
+    motor=MotorAdapter(calibration,'sitl')
+    _,values=motor.convert([-100,100])
+    np.testing.assert_array_equal(values,[-7,20])
+    assert motor.minimum_force == -7
+    assert motor.maximum_force == 20
+
+
+@pytest.mark.parametrize('limits', [
+    {'minimum_force_N': -7.},
+    {'maximum_force_N': 20.},
+    {'minimum_force_N': -16., 'maximum_force_N': 20.},
+    {'minimum_force_N': -7., 'maximum_force_N': 26.},
+    {'minimum_force_N': 1., 'maximum_force_N': 20.},
+    {'minimum_force_N': -7., 'maximum_force_N': -1.},
+])
+def test_invalid_asymmetric_deployment_limits_rejected(calibration,limits):
+    c=json.loads(calibration.read_text())
+    c.pop('maximum_abs_force_N')
+    c.update(limits)
+    calibration.write_text(json.dumps(c))
+    with pytest.raises(ValueError,match='directional deployment'):
+        MotorAdapter(calibration,'sitl')
+
+
 def test_hardware_identity_does_not_depend_on_uid(calibration):
     config=json.loads(calibration.read_text())
     config.update(target='hardware',sitl_test_passed=True,restrained_motor_test_passed=True)

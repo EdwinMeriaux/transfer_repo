@@ -58,16 +58,34 @@ class MotorAdapter(MotorInterface):
             if len(zero) != 1 or zero[0, 1] != config[name]['neutral_pwm']:
                 raise ValueError('An explicitly measured neutral point is required')
             self.curves.append(values)
-        self.force_limit = float(config['maximum_abs_force_N'])
-        if not np.isfinite(self.force_limit) or not 0 < self.force_limit <= 25:
-            raise ValueError('Invalid deployment thrust cap')
+        directional_limits = ('minimum_force_N', 'maximum_force_N')
+        if any(key in config for key in directional_limits):
+            if not all(key in config for key in directional_limits):
+                raise ValueError('Both directional deployment thrust limits are required')
+            self.minimum_force = float(config['minimum_force_N'])
+            self.maximum_force = float(config['maximum_force_N'])
+            if (not np.isfinite([self.minimum_force, self.maximum_force]).all()
+                    or not -15 <= self.minimum_force <= 0
+                    or not 0 <= self.maximum_force <= 25
+                    or self.minimum_force >= self.maximum_force):
+                raise ValueError('Invalid directional deployment thrust limits')
+            self.force_limit = max(abs(self.minimum_force),
+                                   abs(self.maximum_force))
+        else:
+            # Backward compatibility for reviewed calibrations created before
+            # directional deployment limits were introduced.
+            self.force_limit = float(config['maximum_abs_force_N'])
+            if not np.isfinite(self.force_limit) or not 0 < self.force_limit <= 25:
+                raise ValueError('Invalid deployment thrust cap')
+            self.minimum_force = max(-15., -self.force_limit)
+            self.maximum_force = min(25., self.force_limit)
 
 
     def convert(self, forces):
         values = np.asarray(forces, dtype=float)
         if values.shape != (2,) or not np.isfinite(values).all():
             raise ValueError('Invalid left/right forces')
-        applied = np.clip(values, max(-15., -self.force_limit), min(25., self.force_limit))
+        applied = np.clip(values, self.minimum_force, self.maximum_force)
         if self.lookup:
             pairs = [self.lookup.inverse(force, side) for force, side in zip(applied, ('left', 'right'))]
             return [p[0] for p in pairs], np.array([p[1] for p in pairs])

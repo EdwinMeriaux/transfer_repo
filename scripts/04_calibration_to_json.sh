@@ -5,7 +5,8 @@ BLUEBOAT_REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BLUEBOAT_CONFIG="${BLUEBOAT_CONFIG:-$HOME/.config/blueboat/alberto}"
 BLUEBOAT_WORKSPACE="${BLUEBOAT_WORKSPACE:-$HOME/blueboat_ws}"
 MASS_STD_KG="${MASS_STD_KG:-2.0}"
-MAX_FORCE_N="${MAX_FORCE_N:-3.0}"
+MIN_FORCE_N="${MIN_FORCE_N:--7.0}"
+MAX_FORCE_N="${MAX_FORCE_N:-20.0}"
 
 LATEST_CSV=""
 for BLUEBOAT_CSV in "$BLUEBOAT_CONFIG"/runs/calibration/calibration-*.csv; do
@@ -58,17 +59,16 @@ if [[ "$BLUEBOAT_APPROVAL" != "APPROVE" ]]; then
 fi
 
 cd "$REPORT"
-jq -e --argjson cap "$MAX_FORCE_N" '
+jq -e --argjson minimum "$MIN_FORCE_N" --argjson maximum "$MAX_FORCE_N" '
   .paired_validation.passed == true and
   (.unmeasured | length == 0) and
-  ([
-    .curves.left_forward,
-    .curves.left_reverse,
-    .curves.right_forward,
-    .curves.right_reverse
-  ] | all(
-    (.measured_force_domain_N[0] <= $cap) and
-    (.measured_force_domain_N[1] >= $cap)
+  ([.curves.left_forward, .curves.right_forward] | all(
+    .measured_force_domain_N[0] <= $maximum and
+    .measured_force_domain_N[1] >= $maximum
+  )) and
+  ([.curves.left_reverse, .curves.right_reverse] | all(
+    .measured_force_domain_N[0] <= (-$minimum) and
+    .measured_force_domain_N[1] >= (-$minimum)
   ))
 ' lookup.json >/dev/null
 
@@ -79,11 +79,15 @@ jq '
 mv lookup.tmp lookup.json
 
 LOOKUP_SHA="$(sha256sum lookup.json | awk '{print $1}')"
-jq --arg sha "$LOOKUP_SHA" --argjson cap "$MAX_FORCE_N" '
+jq --arg sha "$LOOKUP_SHA" \
+   --argjson minimum "$MIN_FORCE_N" \
+   --argjson maximum "$MAX_FORCE_N" '
   .verified = true |
   .effective_mapping_accepted = true |
   .independent_effective_mapping_verified = true |
-  .maximum_abs_force_N = $cap |
+  del(.maximum_abs_force_N) |
+  .minimum_force_N = $minimum |
+  .maximum_force_N = $maximum |
   .effective_lookup_sha256 = $sha
 ' ppo_calibration.draft.json > ppo_calibration.json
 
@@ -91,16 +95,23 @@ source /opt/ros/humble/setup.bash
 source "$BLUEBOAT_REPO/.venv/bin/activate"
 source "$BLUEBOAT_WORKSPACE/install/setup.bash"
 
-python3 - "$REPORT/ppo_calibration.json" "$MAX_FORCE_N" <<'PY'
+python3 - "$REPORT/ppo_calibration.json" "$MIN_FORCE_N" "$MAX_FORCE_N" <<'PY'
 import sys
 from blueboat_ppo_controller.motor_adapter import MotorAdapter
 
 path = sys.argv[1]
-limit = float(sys.argv[2])
+minimum = float(sys.argv[2])
+maximum = float(sys.argv[3])
 adapter = MotorAdapter(path, "hardware")
-for forces in ([0.0, 0.0], [limit, limit], [-limit, -limit],
-               [limit, -limit], [-limit, limit]):
-    adapter.convert(forces)
+for forces, expected in (
+        ([0.0, 0.0], [0.0, 0.0]),
+        ([maximum, maximum], [maximum, maximum]),
+        ([minimum, minimum], [minimum, minimum]),
+        ([25.0, -15.0], [maximum, minimum]),
+        ([-15.0, 25.0], [minimum, maximum])):
+    _, applied = adapter.convert(forces)
+    if list(map(float, applied)) != expected:
+        raise SystemExit(f"Unexpected deployment clamp: {forces} -> {applied}")
 print("FINAL PPO CALIBRATION VALID")
 PY
 

@@ -243,7 +243,7 @@ To use a reviewed effective lookup, preserve the CSV and original mapping eviden
 | `effective_lookup_file`, `effective_lookup_sha256` | Relative path to the reviewed lookup and hash of its final contents. |
 | `effective_mapping_accepted` | Explicit acceptance of inertial-response vs. actual PPO force semantics and their limitations. |
 | `independent_effective_mapping_verified` | Reviewed isolation/geometry/paired/transient evidence supporting two motor mappings. |
-| `maximum_abs_force_N` | Deliberate deployment cap, ≤25 N; does not waive measured-region checks. |
+| `minimum_force_N`, `maximum_force_N` | Directional deployment limits within the policy's −15…+25 N envelope; do not waive measured-region checks. Legacy reviewed calibrations with `maximum_abs_force_N` remain supported. |
 
 Only a reviewer with supporting evidence may set acceptance flags and `verified: true` in the PPO JSON, and `verified: true` / `independent_mapping_reviewed: true` in the lookup. Recompute `effective_lookup_sha256` after any reviewed lookup edit. Its automatic `paired_validation.passed` must also be true (two matched magnitudes in each direction). Session metadata must identify a powered run of the same target, exact firmware/vehicle, motor mapping, expected parameters and neutrals. A missing/stale/synthetic/mismatched fit is refused. The normal PPO `calibration_file` parameter selects this JSON; no model changes are needed. The legacy `force_pwm_points` path remains supported with its original full −15..25 N coverage requirement.
 

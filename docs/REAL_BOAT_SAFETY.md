@@ -37,7 +37,12 @@ Required `expected_parameters` include:
 
 Mode selection must not share either owned motor input or the enable switch. Test MAVLink source/GCS identity authorization too: the controlling GCS/sysid parameters vary by firmware. Do not blindly assign IDs or disable authentication/failsafes to get output. See [ArduPilot RC input/override documentation](https://ardupilot.org/dev/docs/mavlink-rcinput.html).
 
-`maximum_abs_force_N` starts at 3 N in the template. This is a conservative software request cap, **not a claim that 3 N is safe for every setup** and not a verified physical bound without calibration. Increase only according to measured trial results. Existing motor slew/failsafe behavior remains active.
+The generic template's legacy `maximum_abs_force_N` starts at 3 N. Alberto's
+review finalizer proposes directional limits of −7 N reverse and +20 N forward,
+but it cannot install them unless the measured lookup covers both limits and all
+other acceptance gates pass. These are software request limits, **not a claim
+that either force is safe for the installed boat** without restrained wet
+calibration. Existing motor slew/failsafe behavior remains active.
 
 ## Runtime stop behavior
 
