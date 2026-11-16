@@ -1,5 +1,15 @@
 # Controller and observation contract
 
+## Default e274_6.5B actor
+
+The default `e274_6_5b` backend is the owner-supplied history-aware generalist BlueBoat actor. It runs at 50 Hz and receives five ONNX tensors: joint description `[1,2,55]`, joint state `[1,2,4]`, general state `[1,32]`, joint history `[1,2,16]`, and body history `[1,74]`. The ROS monitoring topic flattens these in that order into 256 values. History lags are 1, 2, 4 and 8 control frames. History and the previous raw action reset whenever output stops or control restarts.
+
+Velocity, angular velocity and projected gravity use the ROS FLU body/IMU frame. Commands contain forward velocity and positive-left yaw rate; unsupported lateral and vertical axes remain zero. The actor returns port/starboard actions. Its supplied conversion scales each action by 7.5 N and clips each thruster to `[-15,+25] N`. The calibrated `MotorAdapter` then applies its independently approved deployment cap and PWM mapping. Every valid log row records whether this second cap changed the requested force.
+
+The `legacy` backend below remains available for explicit rollback and comparison; it is no longer the default.
+
+## Legacy single-observation actor
+
 The controller is a low-level feedback policy: desired forward speed `u*` and counterclockwise yaw rate `r*` plus measured motion produce independent port/left and starboard/right forces. A separate planner would turn a destination into these requests. There is no waypoint planner, obstacle avoidance or position-hold guarantee here; a zero velocity request is not an emergency motor stop.
 
 ## Exact trained policy
@@ -8,7 +18,7 @@ Source: `loco_mjx` commit `05ffc1b9aa0f016253dff255ad37d7882310f36b`, branch `bl
 
 The deterministic actor uses the learned mean; it does not sample Gaussian exploration noise. Network width multiplier is 0.5. Two actuator tokens each contain 51 description fields and four state fields. The presence flag (description index 50) is excluded from the 54-input encoder and masks the state latent. The description/state encoder is 54→128→128 with LayerNorm and GELU; a separate 4→8 GELU state encoder feeds 128 routing groups. Learned temperatures and masked aggregation give 128×8=1024 features. Concatenating 34 general features yields 1058 inputs to the weight-normalized core: 1058→256→128→128→128→128, LayerNorm after the first layer and GELU between hidden layers. Routing decodes two actuator means, clipped to ±10 as in the source actor.
 
-There is no recurrent state, observation history, privileged actor observation or symmetric actor in this checkpoint. The `history_routing` configuration flag is inactive because history inputs are disabled. The only feedback memory supplied here is the **previous raw actor mean**. The stochastic log-standard-deviation weights are preserved in the extracted archive but not used for deterministic inference.
+There is no recurrent state, observation history, privileged actor observation or symmetric actor in the legacy checkpoint. The `history_routing` configuration flag is inactive because history inputs are disabled. The only feedback memory supplied here is the **previous raw actor mean**. The stochastic log-standard-deviation weights are preserved in the extracted archive but not used for deterministic inference.
 
 The ONNX graph uses opset 17 / IR 9, float32, input `observation` shaped `[batch,289]`, output `actions` shaped `[batch,2]`. It implements source GELU, LayerNorm fast variance/epsilon and weight normalization directly, without changing the architecture. In deployment the batch is one. Export tests compared 1,024 randomized six-degree-of-freedom inputs against the original JAX actor: maximum absolute raw-action discrepancy **2.116e-6**, tolerance `atol=rtol=2e-5`. This is numerical equivalence over tested inputs, not a proof over all possible states.
 

@@ -23,7 +23,7 @@ Motion subscriptions use sensor-data QoS (best effort, volatile); command and en
 | Topic | Type | Contract |
 |---|---|---|
 | `/blueboat/requested_forces` | `std_msgs/msg/Float64MultiArray` | `[left_N,right_N]` after policy clipping/scaling, before deployment cap; valid control frames only. |
-| `/blueboat/observation` | `std_msgs/msg/Float64MultiArray` | Exact 289 normalized floats; valid control frames only. |
+| `/blueboat/observation` | `std_msgs/msg/Float64MultiArray` | Flattened policy inputs for valid control frames: 256 values for `e274_6_5b`, or 289 for `legacy`. |
 | `/blueboat/diagnostics` | `std_msgs/msg/String` | JSON status/fault records; successful rows include command, quaternion, body velocity/rates, raw actions, requested/capped forces, RC PWM and timing. |
 | `/mavros/rc/override` | `mavros_msgs/msg/OverrideRCIn` | **Actuator mode only**. Exactly 18 uint16 entries. Two owned channels in 1–8; all others 65535 (ignore). Release uses 0 on owned channels only. |
 
@@ -45,6 +45,6 @@ Checks expire after 15 s. Unavailable services, mismatches or hung queries preve
 
 Start with `config/controller.yaml`. Every topic in this document is configurable using the corresponding `*_topic` node parameter; vehicle/parameter services use `vehicle_info_service`, `param_pull_service`, `param_get_service`. Diagnostics/forces/observation names can be added to the YAML. Other parameters are `world_frame`, `body_frame`, the three safety timeouts, and `log_directory`.
 
-`model_directory` defaults to bundled assets; an override must contain the model, contract and matching manifest. `log_directory` defaults to `~/.ros/blueboat`, with one unique JSONL file per run. Save this file alongside the ROS bag and calibration/evidence. `scripts/analyze_log.py` computes sample-based speed/yaw RMSE and inference p99 over valid rows; it excludes fault rows and does not imply those intervals tracked correctly. Record the full test duration and fault counts when reporting results.
+`policy_backend` defaults to the history-aware `e274_6_5b`; `legacy` is retained only as an explicit rollback. `model_directory` defaults to the selected backend's bundled assets and an override must contain that backend's complete files and matching manifest. The e274 history and previous raw action reset on every output stop or restart. `log_directory` defaults to `~/.ros/blueboat`, with one unique JSONL file per run. Valid-frame records include `force_saturated` and `force_saturation_error_N`, comparing policy-requested force with the calibrated `MotorAdapter` result. Save this file alongside the ROS bag and calibration/evidence. `scripts/analyze_log.py` computes sample-based speed/yaw RMSE and inference p99 over valid rows; it excludes fault rows and does not imply those intervals tracked correctly. Record the full test duration and fault counts when reporting results.
 
 Launch arguments `mode`, `enable_actuators`, `deployment_target`, `calibration_file` and `use_sim_time` explicitly override the YAML. Their safe defaults remain shadow, false, sitl, empty and false, even if a copied YAML contains actuator settings.

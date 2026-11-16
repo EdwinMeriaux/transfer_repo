@@ -4,6 +4,9 @@ blueboat_ppo_controller:
     enable_actuators: false
     deployment_target: hardware
     calibration_file: ''
+    # New policy is evaluated in shadow by default; powered hardware remains
+    # blocked until a measured hardware calibration is installed.
+    policy_backend: e274_6_5b
     model_directory: ''
     command_topic: /blueboat/cmd_vel
     enable_topic: /blueboat/enable

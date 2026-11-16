@@ -13,6 +13,7 @@ def generate_launch_description():
         DeclareLaunchArgument('mode', default_value='shadow'),
         DeclareLaunchArgument('enable_actuators', default_value='false'),
         DeclareLaunchArgument('calibration_file', default_value=''),
+        DeclareLaunchArgument('policy_backend', default_value='e274_6_5b'),
         DeclareLaunchArgument('deployment_target', default_value='sitl'),
         DeclareLaunchArgument('use_sim_time', default_value='false'),
         Node(package='blueboat_ppo_controller', executable='ppo_node', name='blueboat_ppo_controller', output='screen',
@@ -20,5 +21,6 @@ def generate_launch_description():
                 'mode': ParameterValue(LaunchConfiguration('mode'), value_type=str),
                 'enable_actuators': ParameterValue(LaunchConfiguration('enable_actuators'), value_type=bool),
                 'calibration_file': ParameterValue(LaunchConfiguration('calibration_file'), value_type=str),
+                'policy_backend': ParameterValue(LaunchConfiguration('policy_backend'), value_type=str),
                 'deployment_target': ParameterValue(LaunchConfiguration('deployment_target'), value_type=str),
                 'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}])])

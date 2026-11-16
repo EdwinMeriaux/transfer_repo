@@ -29,7 +29,7 @@ inference_test
 
 Use Ubuntu's Python 3.10 with Humble, not a separate Conda Python. System site packages make the apt-installed ROS Python bindings available. ONNX Runtime uses its CPU provider; CUDA/TensorRT and JetPack-specific GPU inference are not required. Let pip select a compatible CPython 3.10/aarch64 wheel. Installation and timing on Jetson remain to be tested; an unavailable wheel or import error is a dependency issue to resolve before proceeding, not a reason to substitute a different model.
 
-The inference test checks the bundled hashes, runs a known observation 1,000 times and prints left/right raw actions, forces and timing. Expected raw action approximately `[0.639906, 1.226293]`, forces `[15.99765, 25.0]` N. These are offline numbers and publish nothing. The package loads bundled ONNX automatically; no checkpoint conversion is needed. `model_directory` may point to another copy of the **same** assets including the manifest, but must not point to the ZIP checkpoint.
+The inference test checks the bundled hashes, runs the default e274 actor 1,000 times and prints port/starboard raw actions, forces and timing. These are offline numbers and publish nothing. Use `inference_test --policy-backend legacy` only to verify the retained rollback actor (expected legacy raw action approximately `[0.639906, 1.226293]`, forces `[15.99765, 25.0]` N). The package loads the selected bundled ONNX automatically; no checkpoint conversion is needed. `model_directory` may point to another complete copy of the selected backend's assets including its manifest, but must not point to a ZIP checkpoint.
 
 ## 2. Add to your existing ROS workspace and build
 

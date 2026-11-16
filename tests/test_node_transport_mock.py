@@ -108,14 +108,17 @@ def test_full_shadow_loop_never_creates_actuator_publisher(node_factory):
     node.control()
     assert '/mavros/rc/override' not in node.publishers
     assert len(node.forces.messages) == len(node.observations.messages) == 1
-    assert len(node.observations.messages[0].data) == 289
+    assert len(node.observations.messages[0].data) == 256
     previous = node.previous_action.copy()
     assert np.any(previous != 0)
     node.state_callback(S(connected=True,armed=False,mode='HOLD',system_status=3))
     np.testing.assert_array_equal(previous,node.previous_action)
     node.control()
     obs = node.observations.messages[-1].data
-    np.testing.assert_allclose(np.array(obs)[[53,108]], previous / 10, atol=1e-7)
+    # The supplied e274 runtime intentionally stores history observations as
+    # float16 before presenting float32 tensors to the actor.
+    np.testing.assert_allclose(
+        np.array(obs)[[112,116]], previous / 10, atol=2e-5, rtol=2e-5)
     node.close()
     assert node.gate.closed and not node.watchdog.is_alive()
 
@@ -140,6 +143,19 @@ def test_rover_shadow_uses_validated_sources_without_unsupported_estimator_statu
     assert 'estimator' not in node.receipts
     node.control()
     assert len(node.forces.messages) == len(node.observations.messages) == 1
+
+
+def test_legacy_policy_backend_remains_an_explicit_rollback(node_factory):
+    node = node_factory(policy_backend='legacy')
+    node.control()
+    assert len(node.observations.messages[-1].data) == 289
+    payload = json.loads(node.diagnostics.messages[-1].data)
+    assert payload['policy_backend'] == 'legacy'
+
+
+def test_unknown_policy_backend_is_rejected(node_factory):
+    with pytest.raises(ValueError, match='policy_backend'):
+        node_factory(policy_backend='unknown')
 
 
 def test_actuator_timeout_neutral_release_and_latch(node_factory):
@@ -202,16 +218,44 @@ def test_logging_failure_stops_active_outputs(node_factory, monkeypatch):
 def test_late_inference_cannot_publish_after_watchdog(node_factory, monkeypatch):
     node = node_factory('actuator')
     node.control()
-    original = node.runtime.action
-    def delayed(observation):
+    original = node.policy_step
+    def delayed(*args):
         time.sleep(.16)
-        return original(observation)
-    monkeypatch.setattr(node.runtime, 'action', delayed)
+        return original(*args)
+    monkeypatch.setattr(node, 'policy_step', delayed)
     count = len(node.forces.messages)
     node.control()
     assert node.gate.fault in ('watchdog_timeout','control_deadline_missed')
     assert len(node.forces.messages) == count
     assert node.output.messages[-1].channels[0] in (0,1500)
+
+
+def test_generalist_history_resets_after_output_stop(node_factory):
+    node = node_factory()
+    node.control()
+    assert node.runtime.history_age == 1
+    first = node.previous_action.copy()
+    node.control()
+    assert node.runtime.history_age == 2
+    node.stop_outputs('enable_released')
+    assert node.policy_reset_pending
+    np.testing.assert_array_equal(node.previous_action, [0, 0])
+    node.gate.fault = None
+    node.enabled = True
+    node.receipts['enable'] = time.monotonic()
+    node.control()
+    assert node.runtime.history_age == 1
+    np.testing.assert_allclose(node.previous_action, first, atol=2e-6, rtol=2e-6)
+
+
+def test_actuator_diagnostics_record_force_saturation(node_factory):
+    node = node_factory('actuator')
+    node.motor.force_limit = .5
+    node.control()
+    payload = json.loads(node.diagnostics.messages[-1].data)
+    assert payload['policy_backend'] == 'e274_6_5b'
+    assert payload['force_saturated'] is True
+    assert max(abs(value) for value in payload['capped_forces_N']) <= .5
 
 
 def test_parameter_mismatch_stops_control(node_factory):

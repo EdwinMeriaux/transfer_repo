@@ -9,6 +9,7 @@ import numpy as np
 from blueboat_ppo_controller.mission_control import MissionController
 from blueboat_ppo_controller.observation_adapter import ObservationAdapter
 from blueboat_ppo_controller.policy_runtime import PolicyRuntime, thrust_action
+from blueboat_ppo_controller.generalist_policy_runtime import GeneralistPolicyRuntime
 from bridge import GazeboBoat
 
 
@@ -18,6 +19,7 @@ parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--mission', choices=('out-and-back', 'center-circle'), required=True)
 parser.add_argument('--speed', type=float, default=.4)
 parser.add_argument('--max-seconds', type=float, default=360.)
+parser.add_argument('--policy-backend', choices=('e274_6_5b', 'legacy'), default='e274_6_5b')
 args = parser.parse_args()
 if args.output.exists():
     raise FileExistsError(args.output)
@@ -25,8 +27,8 @@ if not 0 < args.speed <= .8 or not 10 <= args.max_seconds <= 1200:
     raise ValueError('Invalid mission speed or timeout')
 args.output.mkdir(parents=True)
 
-runtime = PolicyRuntime()
-adapter = ObservationAdapter(runtime.contract)
+runtime = GeneralistPolicyRuntime() if args.policy_backend == 'e274_6_5b' else PolicyRuntime()
+adapter = None if args.policy_backend == 'e274_6_5b' else ObservationAdapter(runtime.contract)
 boat = GazeboBoat(args.world)
 for _ in range(600):
     boat.step(np.zeros(2))
@@ -43,10 +45,16 @@ for step in range(round(args.max_seconds / .02)):
     state = boat.state
     command = controller.update(state['position'][:2], state['euler_rpy'][2])
     target = np.array([command.surge_m_s, command.yaw_rate_rad_s])
-    observation = adapter.from_world(
-        state['quaternion_xyzw'], state['velocity_world'], state['omega_world'], target, previous)
-    action = runtime.action(observation)
-    force = thrust_action(action)
+    if args.policy_backend == 'e274_6_5b':
+        action = runtime.action_from_body(
+            state['quaternion_xyzw'], state['body_velocity'],
+            state['body_omega'], target, previous)
+        force = runtime.actuator_controls(action)
+    else:
+        observation = adapter.from_world(
+            state['quaternion_xyzw'], state['velocity_world'], state['omega_world'], target, previous)
+        action = runtime.action(observation)
+        force = thrust_action(action)
     if command.complete:
         force = np.zeros(2)
         action = previous.copy()
@@ -78,6 +86,7 @@ numeric = np.asarray([[float(value) for value in row[2:]] for row in records])
 positions = numeric[:, 8:10]
 origin = positions[0]
 summary = dict(
+    policy_backend=args.policy_backend,
     mission=args.mission,
     completed=controller.stage == 'complete',
     duration_s=records[-1][0],
@@ -89,7 +98,8 @@ summary = dict(
     max_forward_speed_m_s=float(np.max(np.abs(numeric[:, 2]))),
     stages=stage_ids,
     path='relative mission -> deterministic ONNX PPO -> Newton forces -> Gazebo Harmonic marine physics',
-    checkpoint_sha256=runtime.contract['checkpoint_sha256'])
+    policy_source_sha256=(runtime.manifest['source_archive_sha256']
+        if args.policy_backend == 'e274_6_5b' else runtime.contract['checkpoint_sha256']))
 
 if args.mission == 'out-and-back':
     summary.update(

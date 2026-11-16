@@ -7,6 +7,7 @@ import zipfile
 import numpy as np
 import pytest
 from blueboat_ppo_controller.policy_runtime import PolicyRuntime, thrust_action
+from blueboat_ppo_controller.generalist_policy_runtime import GeneralistPolicyRuntime
 from blueboat_ppo_controller.observation_adapter import ObservationAdapter
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,6 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 @pytest.fixture(scope='module')
 def runtime():
     return PolicyRuntime()
+
+
+@pytest.fixture(scope='module')
+def generalist():
+    return GeneralistPolicyRuntime()
 
 
 def test_original_checkpoint_integrity():
@@ -72,3 +78,65 @@ def test_inference_timing(runtime):
         runtime.action(values)
         samples.append(time.perf_counter()-t)
     assert np.quantile(samples,.99) < .02
+
+
+def test_generalist_assets_schema_and_known_first_action(generalist):
+    action = generalist.action_from_body(
+        [0, 0, 0, 1], [0, 0, 0], [0, 0, 0], [.5, 0], [0, 0])
+    np.testing.assert_allclose(
+        action, [.31017452, .31017452], atol=2e-6, rtol=2e-6)
+    np.testing.assert_allclose(
+        generalist.actuator_controls(action),
+        [2.326309, 2.326309], atol=2e-5, rtol=2e-5)
+    assert generalist.last_observation.shape == (256,)
+
+
+def test_generalist_history_reset_is_exact(generalist):
+    def sequence():
+        generalist.reset_history()
+        previous = np.zeros(2)
+        actions = []
+        for _ in range(12):
+            previous = generalist.action_from_body(
+                [0, 0, 0, 1], [0, 0, 0], [0, 0, 0], [.5, 0], previous)
+            actions.append(previous.copy())
+        return np.asarray(actions)
+    np.testing.assert_array_equal(sequence(), sequence())
+
+
+def test_generalist_command_force_and_yaw_contract(generalist):
+    np.testing.assert_array_equal(generalist.fix_command([.09, 0]), [0, 0, 0, 0])
+    np.testing.assert_allclose(
+        generalist.fix_command([2, 2]), [1, 0, 0, .9836066], atol=1e-7)
+    np.testing.assert_array_equal(
+        generalist.actuator_controls([-10, 10]), [-15, 25])
+    generalist.reset_history()
+    left = generalist.action_from_body(
+        [0, 0, 0, 1], [0, 0, 0], [0, 0, 0], [0, .4], [0, 0])
+    generalist.reset_history()
+    right = generalist.action_from_body(
+        [0, 0, 0, 1], [0, 0, 0], [0, 0, 0], [0, -.4], [0, 0])
+    np.testing.assert_allclose(left, right[::-1], atol=2e-6, rtol=2e-6)
+    assert left[0] < left[1]
+
+
+@pytest.mark.parametrize('q,v,w', [
+    ([0,0,0,0], [0,0,0], [0,0,0]),
+    ([0,0,0,1], [np.nan,0,0], [0,0,0]),
+    ([0,0,0,1], [0,0,0], [0,np.inf,0]),
+])
+def test_generalist_rejects_invalid_telemetry(generalist, q, v, w):
+    with pytest.raises(ValueError):
+        generalist.action_from_body(q, v, w, [0, 0], [0, 0])
+
+
+def test_generalist_inference_timing(generalist):
+    samples = []
+    previous = np.zeros(2)
+    generalist.reset_history()
+    for _ in range(500):
+        started = time.perf_counter()
+        previous = generalist.action_from_body(
+            [0, 0, 0, 1], [0, 0, 0], [0, 0, 0], [.5, 0], previous)
+        samples.append(time.perf_counter() - started)
+    assert np.quantile(samples, .99) < .02

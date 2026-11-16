@@ -4,7 +4,7 @@ from setuptools import setup
 setup(name='blueboat_ppo_controller', version='0.1.0',
     description='BlueBoat PPO speed and yaw-rate tracking with guarded MAVROS integration',
     license='LicenseRef-See-Provenance', packages=['blueboat_ppo_controller'],
-    package_data={'blueboat_ppo_controller': ['assets/*', 'profiles/alberto/*']},
+    package_data={'blueboat_ppo_controller': ['assets/*', 'assets/e274_6_5b/*', 'profiles/alberto/*']},
     data_files=[('share/ament_index/resource_index/packages', ['resource/blueboat_ppo_controller']),
         ('share/blueboat_ppo_controller', ['package.xml', 'PROVENANCE.md']),
         ('share/blueboat_ppo_controller/config', glob('config/*')),

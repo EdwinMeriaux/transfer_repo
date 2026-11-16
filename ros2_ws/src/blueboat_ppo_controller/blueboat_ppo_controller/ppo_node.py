@@ -19,6 +19,7 @@ from mavros_msgs.srv import ParamPull, VehicleInfoGet
 from rcl_interfaces.srv import GetParameters
 
 from .policy_runtime import PolicyRuntime, thrust_action
+from .generalist_policy_runtime import GeneralistPolicyRuntime
 from .observation_adapter import ObservationAdapter
 from .motor_adapter import MotorAdapter
 from .mavros_interface import rc_override, telemetry_from_messages
@@ -29,6 +30,7 @@ class PPONode(Node):
     def __init__(self):
         super().__init__('blueboat_ppo_controller')
         defaults = dict(mode='shadow', enable_actuators=False, deployment_target='sitl', calibration_file='', model_directory='',
+            policy_backend='e274_6_5b',
             command_topic='/blueboat/cmd_vel', enable_topic='/blueboat/enable', odometry_topic='/mavros/local_position/odom', imu_topic='/mavros/imu/data',
             state_topic='/mavros/state', rc_input_topic='/mavros/rc/in', estimator_topic='/mavros/estimator_status', require_estimator_status=True,
             rc_override_topic='/mavros/rc/override',
@@ -52,8 +54,16 @@ class PPONode(Node):
             raise ValueError('Invalid telemetry timing setting')
         if target == 'hardware' and self.settings['timestamp_future_tolerance_s'] != 0:
             raise ValueError('Hardware forbids future source timestamp tolerance')
-        self.runtime = PolicyRuntime(self.settings['model_directory'] or None)
-        self.adapter = ObservationAdapter(self.runtime.contract)
+        backend = self.settings['policy_backend']
+        if backend == 'e274_6_5b':
+            self.runtime = GeneralistPolicyRuntime(
+                self.settings['model_directory'] or None)
+            self.adapter = None
+        elif backend == 'legacy':
+            self.runtime = PolicyRuntime(self.settings['model_directory'] or None)
+            self.adapter = ObservationAdapter(self.runtime.contract)
+        else:
+            raise ValueError('policy_backend must be e274_6_5b or legacy')
         self.gate = SafetyGate(
             self.settings['mode'], self.settings['telemetry_timeout_s'],
             self.settings['command_timeout_s'], self.settings['watchdog_timeout_s'],
@@ -71,6 +81,7 @@ class PPONode(Node):
         self.odom = self.imu = self.vehicle = None
         self.command = np.zeros(2)
         self.previous_action = np.zeros(2)
+        self.policy_reset_pending = True
         self.enabled = self.rc_enabled = self.parameters_valid = False
         self.estimator_valid = not self.settings['require_estimator_status']
         self.param_pending = False
@@ -126,6 +137,7 @@ class PPONode(Node):
         ros_now = self.get_clock().now().nanoseconds / 1e9
         row = dict(monotonic_s=monotonic_now, ros_time_s=ros_now,
                    mode=self.gate.mode, deployment_target=self.settings['deployment_target'],
+                   policy_backend=self.settings['policy_backend'],
                    status=status, timing=self.timing_snapshot(monotonic_now, ros_now),
                    **values)
         payload = json.dumps(row, allow_nan=False)
@@ -303,6 +315,29 @@ class PPONode(Node):
                     self.publish_pwm(self.motor.neutral())
                     self.release_at = time.monotonic() + .1
             self.previous_action = np.zeros(2)
+            self.policy_reset_pending = True
+
+
+    def policy_step(self, quaternion, velocity, angular_velocity):
+        if self.policy_reset_pending:
+            reset = getattr(self.runtime, 'reset_history', None)
+            if reset is not None:
+                reset()
+            self.previous_action = np.zeros(2)
+            self.policy_reset_pending = False
+        if self.settings['policy_backend'] == 'legacy':
+            observation = self.adapter.from_body(
+                quaternion, velocity, angular_velocity,
+                self.command, self.previous_action)
+            action = self.runtime.action(observation)
+            forces = thrust_action(action)
+        else:
+            action = self.runtime.action_from_body(
+                quaternion, velocity, angular_velocity,
+                self.command, self.previous_action)
+            forces = self.runtime.actuator_controls(action)
+            observation = self.runtime.last_observation
+        return observation, action, forces
 
 
     def control(self):
@@ -314,9 +349,7 @@ class PPONode(Node):
                 self.record(reason)
                 return
             q, v, omega = telemetry_from_messages(self.odom, self.imu, self.settings['world_frame'], self.settings['body_frame'])
-            observation = self.adapter.from_body(q, v, omega, self.command, self.previous_action)
-            action = self.runtime.action(observation)
-            forces = thrust_action(action)
+            observation, action, forces = self.policy_step(q, v, omega)
             pwm, applied = self.motor.convert(forces) if self.motor else (None, forces)
             with self.lock:
                 now = time.monotonic()
@@ -337,7 +370,8 @@ class PPONode(Node):
             if reason:
                 self.record(reason)
                 return
-            self.record('actuating' if self.motor else 'shadow', command=self.command.tolist(), quaternion_xyzw=q.tolist(), velocity_flu=v.tolist(), angular_velocity_flu=omega.tolist(), action=action.tolist(), requested_forces_N=forces.tolist(), capped_forces_N=applied.tolist(), rc_pwm=pwm, inference_s=self.runtime.elapsed_s, control_elapsed_s=now - started)
+            force_error = np.asarray(forces) - np.asarray(applied)
+            self.record('actuating' if self.motor else 'shadow', command=self.command.tolist(), quaternion_xyzw=q.tolist(), velocity_flu=v.tolist(), angular_velocity_flu=omega.tolist(), action=action.tolist(), requested_forces_N=forces.tolist(), capped_forces_N=applied.tolist(), force_saturated=bool(np.any(np.abs(force_error) > 1e-6)), force_saturation_error_N=force_error.tolist(), rc_pwm=pwm, inference_s=self.runtime.elapsed_s, control_elapsed_s=now - started)
         except Exception as error:
             self.stop_outputs('control_fault')
             try:
