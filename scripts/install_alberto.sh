@@ -50,18 +50,21 @@ import numpy
 import onnxruntime
 import scipy
 import yaml
+from importlib.metadata import version
 
 expected = {
     'numpy': '1.26.4',
     'scipy': '1.11.4',
     'onnxruntime': '1.18.1',
     'PyYAML': '6.0.3',
+    'colcon-common-extensions': '0.3.0',
 }
 actual = {
     'numpy': numpy.__version__,
     'scipy': scipy.__version__,
     'onnxruntime': onnxruntime.__version__,
     'PyYAML': yaml.__version__,
+    'colcon-common-extensions': version('colcon-common-extensions'),
 }
 print({'isolated_environment': actual})
 if actual != expected:
