@@ -79,9 +79,9 @@ fi
 cd "$BLUEBOAT_WORKSPACE"
 python -m colcon build --symlink-install --packages-select blueboat_ppo_controller
 source install/setup.bash
-inference_test
+ros2 run blueboat_ppo_controller inference_test
 if [[ ! -e "$HOME/.config/blueboat/alberto" ]]; then
-  alberto_boat init
+  ros2 run blueboat_ppo_controller alberto_boat init
 else
   echo 'Existing local Alberto configuration preserved.'
 fi

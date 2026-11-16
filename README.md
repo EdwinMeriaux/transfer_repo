@@ -70,7 +70,7 @@ source /opt/ros/humble/setup.bash
 source "$HOME/blueboat-hardware-deployment/.venv/bin/activate"
 source "$HOME/blueboat_ws/install/setup.bash"
 
-inference_test
+ros2 run blueboat_ppo_controller inference_test
 ./scripts/alberto.sh status || true
 ```
 

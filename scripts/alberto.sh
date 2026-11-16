@@ -9,4 +9,4 @@ for BLUEBOAT_SETUP in /opt/ros/humble/setup.bash "$BLUEBOAT_REPO/.venv/bin/activ
   fi
   source "$BLUEBOAT_SETUP"
 done
-exec alberto_boat "$@"
+exec ros2 run blueboat_ppo_controller alberto_boat "$@"
