@@ -1,0 +1,42 @@
+blueboat_thrust_calibration:
+  ros__parameters:
+    mode: dry_run
+    enable_powered: false
+    deployment_target: hardware
+    interface_file: ''
+    mass_kg: 23.0
+    body_frame: base_link
+    world_frame: map
+    raw_imu_topic: /mavros/imu/data_raw
+    attitude_topic: /mavros/imu/data
+    velocity_topic: /mavros/local_position/odom
+    velocity_type: odometry
+    # ArduRover does not emit common ESTIMATOR_STATUS (230).
+    require_estimator_status: false
+    require_output_feedback: true
+    telemetry_timeout_s: 0.2
+    max_skew_s: 0.05
+    min_raw_rate_hz: 40.0
+    min_attitude_rate_hz: 20.0
+    min_velocity_rate_hz: 10.0
+    min_output_rate_hz: 5.0
+    baseline_s: 2.0
+    rest_duration_s: 1.0
+    rest_max_gap_s: 0.06
+    pulse_s: 0.5
+    recovery_s: 3.0
+    delta_pwm:
+    - -40
+    - -60
+    - 40
+    - 60
+    sides:
+    - left
+    - right
+    - symmetric
+    repeats: 3
+    max_delta_pwm: 60
+    log_directory: ''
+    dry_run_neutral_pwm:
+    - 1500
+    - 1500

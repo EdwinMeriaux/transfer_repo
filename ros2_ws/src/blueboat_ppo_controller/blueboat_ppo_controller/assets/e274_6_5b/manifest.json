@@ -1,0 +1,13 @@
+{
+  "source_archive": "blueboat_e274_6.5B.zip",
+  "source_archive_sha256": "09d1ed019b399f16dbf1cefec1408065a1427b329024700001ee7cf94a59222c",
+  "source_bundle_sha256": "dac2763fa8c197b2abf153ea7d76404fafe2207af4ab9acfe96720d1908700f0",
+  "source_actor_sha256": "8517f1df406c83655c11645a38b6121ad42f3ebc75eb7858b79bf7439d8ac8f3",
+  "training_commit": "8564e04b5087988f1347cd7170b687df3377f3cb",
+  "files": {
+    "deploy_config.json": "58d1656230c574fcf4b3863136dc9af2b133e22d628c316b28dcb9efd6b361ef",
+    "e274_6.5B.onnx": "9ded67458fdd177405b89f12f4790a3b43cc08dc4fa377cf3841d6ce39cc6bf5",
+    "general_state_static.npy": "135ee2a299f5fef4b26ca703041ab158e89c9a712ae01e284a9c0c344e15e1d1",
+    "joint_descriptions.npy": "ee9cbb215fbca44e63a3623d6657ca1660de22583e3c9464f0793d311739d808"
+  }
+}

@@ -1,0 +1,37 @@
+blueboat_ppo_controller:
+  ros__parameters:
+    mode: shadow
+    enable_actuators: false
+    deployment_target: hardware
+    calibration_file: ''
+    # New policy is evaluated in shadow by default; powered hardware remains
+    # blocked until a measured hardware calibration is installed.
+    policy_backend: e274_6_5b
+    model_directory: ''
+    command_topic: /blueboat/cmd_vel
+    enable_topic: /blueboat/enable
+    odometry_topic: /mavros/local_position/odom
+    imu_topic: /mavros/imu/data
+    estimator_topic: /mavros/estimator_status
+    # ArduRover emits EKF_STATUS_REPORT (193), which MAVROS does not map here;
+    # retain strict state, frame, timestamp and IMU/odometry freshness checks.
+    require_estimator_status: false
+    state_topic: /mavros/state
+    rc_input_topic: /mavros/rc/in
+    rc_override_topic: /mavros/rc/override
+    world_frame: map
+    body_frame: base_link
+    telemetry_timeout_s: 0.2
+    command_timeout_s: 0.5
+    watchdog_timeout_s: 0.1
+    # Hardware timing remains fail-closed. Characterize the installed system
+    # with scripts/05_hardware_telemetry_characterization.sh before changing
+    # any timeout or skew limit.
+    state_timeout_s: 2.0
+    enable_timeout_s: 0.5
+    rc_timeout_s: 0.5
+    parameter_timeout_s: 15.0
+    estimator_timeout_s: 2.0
+    max_telemetry_skew_s: 0.1
+    # Simulator clock tolerance is never accepted on the hardware target.
+    timestamp_future_tolerance_s: 0.0

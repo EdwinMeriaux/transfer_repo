@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "vehicle_id": "alberto_blueboat",
+  "mass_kg": 23.0,
+  "mass_source": "Alberto reported about 23 kg on 2026-11-09; confirm total wet mass including payload",
+  "parameter_export_name": "Surface Boat-4.6.2-STABLE-20261109-183907-paddle.params",
+  "parameter_export_sha256": "a6005b927404b6fa17edfee31ccb66c8afd878cbe5bf8444ff1ead30d351cda4",
+  "operator_report": {
+    "date": "2026-11-09",
+    "right_servo_output": 1,
+    "left_servo_output": 3,
+    "rc_neutral_pwm": 1500,
+    "forward_above_neutral": true,
+    "manual_takeover": "operator/QGC path is separate from the Jetson MAVROS connection; verify before powered use"
+  },
+  "unknown": [
+    "actual servo neutral and forward sign",
+    "component ID and encoded firmware version",
+    "IMU offset from COM",
+    "mass uncertainty",
+    "completed takeover/failsafe/SITL/telemetry tests",
+    "measured force or effective-force curves",
+    "Jetson-to-Pixhawk UDP endpoint and tested command-loss/manual-takeover behavior"
+  ],
+  "scope": "Hardware-specific draft; not a SITL identity or measured thrust calibration",
+  "control_authority": "direct_mavros",
+  "ground_station": "external operator station",
+  "router": "none in PPO command path"
+}

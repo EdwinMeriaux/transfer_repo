@@ -1,0 +1,31 @@
+blueboat_ppo_controller:
+  ros__parameters:
+    mode: shadow
+    enable_actuators: false
+    deployment_target: sitl
+    calibration_file: ""
+    # e274_6_5b is the history-aware 6.5B-step policy. Use legacy only for
+    # an explicit rollback to the previous 289-value actor.
+    policy_backend: e274_6_5b
+    model_directory: ""
+    command_topic: /blueboat/cmd_vel
+    enable_topic: /blueboat/enable
+    odometry_topic: /mavros/local_position/odom
+    imu_topic: /mavros/imu/data
+    estimator_topic: /mavros/estimator_status
+    require_estimator_status: true
+    state_topic: /mavros/state
+    rc_input_topic: /mavros/rc/in
+    rc_override_topic: /mavros/rc/override
+    world_frame: map
+    body_frame: base_link
+    telemetry_timeout_s: 0.2
+    command_timeout_s: 0.5
+    watchdog_timeout_s: 0.1
+    state_timeout_s: 2.0
+    enable_timeout_s: 0.5
+    rc_timeout_s: 0.5
+    parameter_timeout_s: 15.0
+    estimator_timeout_s: 2.0
+    max_telemetry_skew_s: 0.1
+    timestamp_future_tolerance_s: 0.0
