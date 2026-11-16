@@ -34,7 +34,7 @@ else
 fi
 
 printf '\n=== RELEVANT PROCESSES ===\n'
-pgrep -af 'mavros|ardurover|ArduRover|mavproxy|blueboat|ppo_node|ros2 launch' || printf 'none\n'
+pgrep -af 'mavros_node|sim_vehicle.py|/ardurover|ArduRover|mavproxy.py|blueboat_ppo_controller/ppo_node|ros2 launch.*blueboat' || printf 'none\n'
 
 printf '\n=== SERIAL DEVICES ===\n'
 find /dev -maxdepth 1 \( -name 'ttyACM*' -o -name 'ttyUSB*' -o -name 'serial*' \) -print 2>/dev/null | sort || true
