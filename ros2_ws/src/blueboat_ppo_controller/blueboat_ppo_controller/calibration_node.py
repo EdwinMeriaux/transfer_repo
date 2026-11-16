@@ -22,7 +22,10 @@ from rcl_interfaces.srv import GetParameters
 from .mavros_interface import rc_override
 from .motor_interface import MotorInterface
 from .safety import autopilot_status_reason
-from .thrust_calibration import PulsePlan, Recorder, RestCheck, StreamCheck
+from .thrust_calibration import (
+    PulsePlan, Recorder, RestCheck, StreamCheck,
+    post_command_feedback_ready,
+)
 
 
 def stamp(message):
@@ -46,11 +49,12 @@ class CalibrationNode(Node):
             vehicle_info_service='/mavros/vehicle_info_get', param_pull_service='/mavros/param/pull',
             param_get_service='/mavros/param/get_parameters', telemetry_timeout_s=.2, max_skew_s=.05,
             max_gap_s=.15, min_raw_rate_hz=40., min_attitude_rate_hz=20., min_velocity_rate_hz=10.,
-            min_output_rate_hz=5., require_output_feedback=True, watchdog_timeout_s=.1,
+            min_output_rate_hz=1.8, output_timeout_s=.65, output_max_gap_s=.65,
+            require_output_feedback=True, watchdog_timeout_s=.1,
             baseline_s=2., rest_duration_s=1., rest_max_gap_s=.06,
-            pulse_s=.5, recovery_s=3., repeats=3, delta_pwm=[-40, -60, 40, 60],
+            pulse_s=1., recovery_s=3., repeats=3, delta_pwm=[-40, -60, 40, 60],
             sides=['left', 'right', 'symmetric'], max_delta_pwm=60, dry_run_neutral_pwm=[1500, 1500],
-            output_neutral_tolerance_pwm=15, output_response_grace_s=.15,
+            output_neutral_tolerance_pwm=15, output_response_grace_s=.65,
             output_min_response_pwm=3, accelerometer_semantics='specific_force',
             max_live_speed_m_s=.3, max_live_angular_rate_rad_s=.25, max_live_tilt_rad=.2)
         for name, value in defaults.items():
@@ -60,12 +64,15 @@ class CalibrationNode(Node):
         if s['mode'] not in ('telemetry', 'dry_run', 'powered') or s['velocity_type'] not in ('odometry', 'body_twist', 'world_twist'):
             raise ValueError('Invalid calibration mode or velocity type')
         positive = ('telemetry_timeout_s', 'max_skew_s', 'max_gap_s', 'min_raw_rate_hz', 'min_attitude_rate_hz',
-                    'min_velocity_rate_hz', 'min_output_rate_hz', 'watchdog_timeout_s', 'max_live_speed_m_s',
+                    'min_velocity_rate_hz', 'min_output_rate_hz', 'output_timeout_s', 'output_max_gap_s',
+                    'watchdog_timeout_s', 'max_live_speed_m_s',
                     'max_live_angular_rate_rad_s', 'max_live_tilt_rad', 'output_response_grace_s')
         if any(not np.isfinite(s[k]) or s[k] <= 0 for k in positive) or not 0 < s['watchdog_timeout_s'] <= .2:
             raise ValueError('Invalid telemetry or watchdog thresholds')
         if not 0 < s['telemetry_timeout_s'] <= .5 or not 0 < s['max_skew_s'] <= .1:
             raise ValueError('Unsafe timestamp limits')
+        if not 0 < s['output_timeout_s'] <= .75 or not 0 < s['output_max_gap_s'] <= .75:
+            raise ValueError('Unsafe output-feedback timing limits')
         if not np.isfinite(s['mass_kg']) or s['mass_kg'] < 0:
             raise ValueError('Mass must be finite and nonnegative; powered mode requires measured mass >0')
         if type(s['output_neutral_tolerance_pwm']) is not int or not 0 <= s['output_neutral_tolerance_pwm'] <= 50:
@@ -109,7 +116,9 @@ class CalibrationNode(Node):
         if any(not 1000 <= n + d*sign <= 2000 for n, sign in zip(self.neutral, self.forward_signs) for d in s['delta_pwm']):
             raise ValueError('Pulse plan exceeds absolute PWM bounds')
         self.lock = threading.RLock()
-        self.streams = {key: StreamCheck(s['telemetry_timeout_s'], s['max_gap_s']) for key in ('raw', 'attitude', 'velocity', 'output')}
+        self.streams = {key: StreamCheck(s['telemetry_timeout_s'], s['max_gap_s'])
+                        for key in ('raw', 'attitude', 'velocity')}
+        self.streams['output'] = StreamCheck(s['output_timeout_s'], s['output_max_gap_s'])
         self.latest, self.receipts = {}, {}
         self.vehicle = None
         self.enabled = self.rc_enabled = False
@@ -165,7 +174,9 @@ class CalibrationNode(Node):
         self.events.write(payload+'\n')
 
     def accept(self, name, message):
-        self.streams[name].accept(stamp(message), self.ros_now(), time.monotonic())
+        receipt = time.monotonic()
+        self.streams[name].accept(stamp(message), self.ros_now(), receipt)
+        self.receipts[name] = receipt
         self.latest[name] = message
 
     def invalid(self, name, error):
@@ -250,7 +261,7 @@ class CalibrationNode(Node):
                     stationary &= self.command == self.neutral
                     if self.settings['require_output_feedback']:
                         output = self.latest.get('output')
-                        stationary &= bool(output and 0 <= self.ros_now()-stamp(output) <= self.settings['telemetry_timeout_s']
+                        stationary &= bool(output and 0 <= self.ros_now()-stamp(output) <= self.settings['output_timeout_s']
                             and all(len(output.channels) >= self.motor.config[side]['servo_output']
                                 and abs(output.channels[self.motor.config[side]['servo_output']-1]-self.motor.config[side]['servo_neutral_pwm'])
                                     <= self.settings['output_neutral_tolerance_pwm'] for side in ('left','right')))
@@ -369,7 +380,9 @@ class CalibrationNode(Node):
             return 'estimator_invalid_or_stale'
         if self.settings['require_output_feedback']:
             report = self.streams['output'].report(now, self.ros_now())
-            if not report['fresh'] or report['rate_hz'] < self.settings['min_output_rate_hz']:
+            if (not report['fresh']
+                    or report['rate_hz'] < self.settings['min_output_rate_hz']
+                    or report['max_gap_s'] > self.settings['output_max_gap_s']):
                 return 'output_feedback_missing_or_stale'
             output = self.latest.get('output')
             for side in ('left', 'right'):
@@ -384,10 +397,19 @@ class CalibrationNode(Node):
                     and now-self.phase_started > self.settings['output_response_grace_s']))
                 if self.phase == 'pulse' and self.trial and self.trial.side not in (side, 'symmetric'):
                     neutral_expected = now-self.phase_started > self.settings['output_response_grace_s']
-                if neutral_expected and abs(output.channels[index]-profile['servo_neutral_pwm']) > self.settings['output_neutral_tolerance_pwm']:
+                response_expected = (self.phase == 'pulse' and self.trial
+                    and self.trial.side in (side, 'symmetric')
+                    and now-self.phase_started > self.settings['output_response_grace_s'])
+                if neutral_expected or response_expected:
+                    if not post_command_feedback_ready(
+                            self.command_time, self.receipts.get('output'), now,
+                            self.settings['output_response_grace_s']):
+                        return 'output_feedback_not_updated_after_command'
+                if (neutral_expected
+                        and abs(output.channels[index]-profile['servo_neutral_pwm'])
+                            > self.settings['output_neutral_tolerance_pwm']):
                     return 'actual_output_not_neutral_'+side
-                if (self.phase == 'pulse' and self.trial and self.trial.side in (side, 'symmetric')
-                        and now-self.phase_started > self.settings['output_response_grace_s']):
+                if response_expected:
                     direction = 1 if self.trial.delta_pwm > 0 else -1
                     response = (output.channels[index]-profile['servo_neutral_pwm'])*profile['servo_forward_pwm_sign']*direction
                     if response < self.settings['output_min_response_pwm']:
@@ -398,8 +420,10 @@ class CalibrationNode(Node):
         if self.output is not None:
             self.output.publish(OverrideRCIn(channels=rc_override(self.motor.channels, pwm)))
         if self.output is not None:
-            self.command = None if pwm is None else list(pwm)
-            self.command_time = time.monotonic()
+            command = None if pwm is None else list(pwm)
+            if command != self.command:
+                self.command = command
+                self.command_time = time.monotonic()
 
     def stop(self, reason, immediate=False):
         with self.lock:

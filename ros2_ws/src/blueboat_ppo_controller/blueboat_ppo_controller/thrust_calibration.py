@@ -113,6 +113,14 @@ class StreamCheck:
                     source_stamp_s=self.last_stamp, error=self.last_error)
 
 
+def post_command_feedback_ready(command_time, output_receipt, now, grace_s):
+    """True only after the grace period and a feedback sample newer than the command."""
+    values = (command_time, output_receipt, now, grace_s)
+    if any(value is None or not math.isfinite(value) for value in values):
+        return False
+    return now-command_time >= grace_s and output_receipt > command_time
+
+
 VECTORS = {'a': ('x', 'y', 'z'), 'w': ('x', 'y', 'z'), 'q': ('x', 'y', 'z', 'w'), 'v': ('x', 'y', 'z')}
 CSV_FIELDS = ['receipt_monotonic_s', 'ros_time_s', 'imu_stamp_s', 'attitude_stamp_s', 'velocity_stamp_s',
               'output_stamp_s', 'command_monotonic_s', 'trial_end_monotonic_s', 'trial', 'side', 'delta_pwm', 'phase', 'mode',
