@@ -114,6 +114,14 @@ For an indoor integration-only check when GPS odometry is unavailable, use the g
 ./scripts/06_lab_shadow_synthetic_odom.sh 60
 ```
 
+The propulsion-disconnected routing probe is a separate bootstrap test. It publishes small RC overrides and requires manual arming, but must only be used with propulsion battery/ESC power physically disconnected and an operator beside the boat:
+
+```bash
+./scripts/07_propulsion_disconnected_routing_test.sh
+```
+
+It measures Pixhawk RCOut routing, neutral, separation and PWM signs. It does not test physical motor direction, thrust, or calibration and does not mark the interface approved.
+
 ## Not authorized by this bundle
 
 Do not run `powered`, `ppo`, calibration power, arm, mode-change, or parameter-write commands from this initial handoff. Those require the physical operator, completed measurements, reviewed audit evidence, and a separate step-by-step test plan.
