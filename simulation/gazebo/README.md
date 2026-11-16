@@ -29,6 +29,13 @@ python simulation/gazebo/run_direct.py \
   --seconds 24 --output artifacts/direct-positive-yaw
 ```
 
+Directional deployment limits can be evaluated without changing the policy's
+normalization or recurrent history. For Alberto's proposed initial hardware
+envelope, add `--minimum-force-N -7 --maximum-force-N 20`. The trajectory keeps
+both requested and applied forces, and the summary reports clamp frequency.
+The default remains the complete trained −15…+25 N envelope for reproduction of
+the historical benchmark.
+
 The external path placeholders must be replaced; no machine-specific environment file is shipped. A Conda-native Gazebo installation may additionally need its own `GZ_CONFIG_PATH` and built-in plugin path, as required by that installation. The test runs headless. Outputs are `trajectory.csv` and `summary.json`; output directories must be new so an earlier result is not overwritten.
 
 For the six historical references:
