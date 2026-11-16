@@ -1,0 +1,7 @@
+# Initial physical-boat environment: exact Python 3.10/aarch64 wheels.
+# Installed only inside this repository's .venv; system packages are untouched.
+numpy==1.26.4
+scipy==1.11.4
+onnxruntime==1.18.1
+PyYAML==6.0.3
+

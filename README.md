@@ -60,7 +60,7 @@ Send the complete audit file back for review before installation. If the boat co
 
 ## 3. Install and validate without actuation
 
-Only after reviewing the audit:
+Only after reviewing the audit. The installer creates a private `.venv` without access to system site packages. It installs exact Python 3.10/aarch64-compatible versions (`numpy 1.26.4`, `scipy 1.11.4`, `onnxruntime 1.18.1`, and `PyYAML 6.0.3`) inside that directory only. It does not use `sudo`, apt, firmware tools, or a parameter-writing interface, and it does not alter the boat's system Python, ROS, MAVROS, or Pixhawk versions.
 
 ```bash
 cd "$HOME/blueboat-hardware-deployment"
