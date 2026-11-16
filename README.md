@@ -108,6 +108,12 @@ ros2 topic info /mavros/rc/override
 
 Publisher count must remain `0`. Stop shadow mode with `Ctrl-C`.
 
+For an indoor integration-only check when GPS odometry is unavailable, use the guarded synthetic-odometry shadow test. It does not inject GPS into MAVROS or the Pixhawk and does not count as outdoor navigation evidence:
+
+```bash
+./scripts/06_lab_shadow_synthetic_odom.sh 60
+```
+
 ## Not authorized by this bundle
 
 Do not run `powered`, `ppo`, calibration power, arm, mode-change, or parameter-write commands from this initial handoff. Those require the physical operator, completed measurements, reviewed audit evidence, and a separate step-by-step test plan.

@@ -20,6 +20,7 @@ topics=(
   /mavros/imu/data_raw
   /mavros/imu/data
   /mavros/local_position/odom
+  /mavros/rc/in
   /mavros/rc/out
   /mavros/state
 )
