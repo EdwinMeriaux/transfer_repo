@@ -20,19 +20,37 @@ source /opt/ros/humble/setup.bash
 source "$BLUEBOAT_REPO/.venv/bin/activate"
 source "$BLUEBOAT_WORKSPACE/install/setup.bash"
 
+stop_process_group() {
+  local pid="$1"
+  [ -n "$pid" ] || return
+  kill -0 -- "-$pid" 2>/dev/null || {
+    wait "$pid" 2>/dev/null || true
+    return
+  }
+
+  kill -INT -- "-$pid" 2>/dev/null || true
+  for attempt in $(seq 1 10); do
+    kill -0 -- "-$pid" 2>/dev/null || break
+    sleep 0.5
+  done
+  if kill -0 -- "-$pid" 2>/dev/null; then
+    kill -TERM -- "-$pid" 2>/dev/null || true
+    sleep 2
+  fi
+  if kill -0 -- "-$pid" 2>/dev/null; then
+    kill -KILL -- "-$pid" 2>/dev/null || true
+    sleep 1
+  fi
+  wait "$pid" 2>/dev/null || true
+}
+
 cleanup() {
   [ "$CLEANED" = true ] && return
   CLEANED=true
   set +e
 
-  if [ -n "$CONTROLLER_PID" ] && kill -0 "$CONTROLLER_PID" 2>/dev/null; then
-    kill -INT "$CONTROLLER_PID" 2>/dev/null
-    wait "$CONTROLLER_PID" 2>/dev/null
-  fi
-  if [ -n "$SOURCES_PID" ] && kill -0 "$SOURCES_PID" 2>/dev/null; then
-    kill -INT "$SOURCES_PID" 2>/dev/null
-    wait "$SOURCES_PID" 2>/dev/null
-  fi
+  stop_process_group "$CONTROLLER_PID"
+  stop_process_group "$SOURCES_PID"
 }
 trap cleanup EXIT INT TERM
 
@@ -86,7 +104,7 @@ printf '%s\n' "$IMU" | grep -q 'frame_id: base_link' || {
 }
 
 printf '\n=== START ISOLATED ZERO-COMMAND SOURCES ===\n'
-python "$BLUEBOAT_REPO/scripts/lab_shadow_sources.py" \
+setsid python "$BLUEBOAT_REPO/scripts/lab_shadow_sources.py" \
   > "$OUT/sources.log" 2>&1 &
 SOURCES_PID=$!
 
@@ -105,7 +123,7 @@ done
 }
 
 printf '\n=== START E274 SHADOW CONTROLLER ===\n'
-ros2 run blueboat_ppo_controller ppo_node --ros-args \
+setsid ros2 run blueboat_ppo_controller ppo_node --ros-args \
   --params-file "$PROFILE" \
   -p mode:=shadow \
   -p enable_actuators:=false \
