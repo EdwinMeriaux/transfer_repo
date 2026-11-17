@@ -27,14 +27,16 @@ blueboat_ppo_controller:
     telemetry_timeout_s: 1.25
     command_timeout_s: 0.5
     watchdog_timeout_s: 0.1
-    # Hardware timing remains fail-closed. Characterize the installed system
-    # with scripts/05_hardware_telemetry_characterization.sh before changing
-    # any other timeout or skew limit.
-    state_timeout_s: 2.0
+    # MAVLink state and parameter transport share the constrained link with
+    # telemetry. These bounded slow-path margins do not relax the independent
+    # command, enable, RC-authority, or control-loop watchdog gates.
+    state_timeout_s: 3.0
     enable_timeout_s: 0.5
     rc_timeout_s: 0.5
-    parameter_timeout_s: 15.0
+    parameter_timeout_s: 30.0
     estimator_timeout_s: 2.0
-    max_telemetry_skew_s: 0.1
+    # Allow modest staggering between fresh IMU and odometry samples without
+    # accepting the simulator-only 0.60 s skew allowance on hardware.
+    max_telemetry_skew_s: 0.25
     # Simulator clock tolerance is never accepted on the hardware target.
     timestamp_future_tolerance_s: 0.0

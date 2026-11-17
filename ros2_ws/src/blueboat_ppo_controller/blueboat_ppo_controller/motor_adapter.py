@@ -87,7 +87,13 @@ class MotorAdapter(MotorInterface):
             raise ValueError('Invalid left/right forces')
         applied = np.clip(values, self.minimum_force, self.maximum_force)
         if self.lookup:
-            pairs = [self.lookup.inverse(force, side) for force, side in zip(applied, ('left', 'right'))]
+            # A continuous policy can request forces in the unresolved gap
+            # between measured neutral and the first measured thrust point.
+            # The lookup's clip mode maps that gap to neutral and caps forces
+            # beyond measured coverage; explicitly unmeasured PWM intervals
+            # remain rejected.
+            pairs = [self.lookup.inverse(force, side, out_of_range='clip')
+                     for force, side in zip(applied, ('left', 'right'))]
             return [p[0] for p in pairs], np.array([p[1] for p in pairs])
         pwm = [int(round(np.interp(force, curve[:, 0], curve[:, 1]))) for force, curve in zip(applied, self.curves)]
         return pwm, applied
