@@ -8,7 +8,7 @@ def test_default_gate_rejects_telemetry_timeout_above_one_second():
         SafetyGate(telemetry_timeout=1.01)
 
 
-def test_sitl_gate_accepts_bounded_low_rate_telemetry_timeout():
+def test_explicit_deployment_gate_accepts_bounded_low_rate_telemetry_timeout():
     gate = SafetyGate(
         telemetry_timeout=1.25,
         max_telemetry_timeout=1.5,
@@ -17,7 +17,7 @@ def test_sitl_gate_accepts_bounded_low_rate_telemetry_timeout():
     assert gate.telemetry_timeout == 1.25
 
 
-def test_sitl_gate_rejects_telemetry_timeout_above_its_cap():
+def test_deployment_gate_rejects_telemetry_timeout_above_its_cap():
     with pytest.raises(ValueError, match='Invalid safety timeout'):
         SafetyGate(
             telemetry_timeout=1.51,

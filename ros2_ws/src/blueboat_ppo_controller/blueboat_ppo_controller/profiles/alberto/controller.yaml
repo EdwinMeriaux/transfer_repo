@@ -21,12 +21,15 @@ blueboat_ppo_controller:
     rc_override_topic: /mavros/rc/override
     world_frame: map
     body_frame: base_link
-    telemetry_timeout_s: 0.2
+    # The installed MAVLink connection has exhibited unavoidable bandwidth
+    # pauses of about 1.1 s. Keep a bounded 150 ms margin above that measured
+    # gap; command, enable and watchdog timeouts remain independently fast.
+    telemetry_timeout_s: 1.25
     command_timeout_s: 0.5
     watchdog_timeout_s: 0.1
     # Hardware timing remains fail-closed. Characterize the installed system
     # with scripts/05_hardware_telemetry_characterization.sh before changing
-    # any timeout or skew limit.
+    # any other timeout or skew limit.
     state_timeout_s: 2.0
     enable_timeout_s: 0.5
     rc_timeout_s: 0.5
