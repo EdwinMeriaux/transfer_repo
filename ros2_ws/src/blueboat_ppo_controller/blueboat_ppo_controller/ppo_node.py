@@ -68,7 +68,8 @@ class PPONode(Node):
             self.settings['mode'], self.settings['telemetry_timeout_s'],
             self.settings['command_timeout_s'], self.settings['watchdog_timeout_s'],
             self.settings['state_timeout_s'], self.settings['enable_timeout_s'],
-            self.settings['rc_timeout_s'], self.settings['parameter_timeout_s'])
+            self.settings['rc_timeout_s'], self.settings['parameter_timeout_s'],
+            max_telemetry_timeout=1.5 if target == 'sitl' else 1.0)
         self.motor = None
         self.output = None
         if self.gate.mode == 'actuator':

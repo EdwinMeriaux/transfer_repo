@@ -20,13 +20,18 @@ def autopilot_status_reason(system_status):
 class SafetyGate:
     def __init__(self, mode='shadow', telemetry_timeout=.2, command_timeout=.5,
                  watchdog_timeout=.1, state_timeout=2., enable_timeout=.5,
-                 rc_timeout=.5, parameter_timeout=15.):
+                 rc_timeout=.5, parameter_timeout=15.,
+                 max_telemetry_timeout=1.):
         if mode not in ('shadow', 'actuator'):
             raise ValueError('Mode must be shadow or actuator')
-        fast_timeouts = (telemetry_timeout, command_timeout, watchdog_timeout,
-                         enable_timeout, rc_timeout)
+        fast_timeouts = (command_timeout, watchdog_timeout, enable_timeout,
+                         rc_timeout)
         slow_timeouts = (state_timeout, parameter_timeout)
-        if (not all(math.isfinite(v) and 0 < v <= 1 for v in fast_timeouts)
+        if (not math.isfinite(max_telemetry_timeout)
+                or not 0 < max_telemetry_timeout <= 1.5
+                or not math.isfinite(telemetry_timeout)
+                or not 0 < telemetry_timeout <= max_telemetry_timeout
+                or not all(math.isfinite(v) and 0 < v <= 1 for v in fast_timeouts)
                 or not all(math.isfinite(v) and 0 < v <= 60 for v in slow_timeouts)):
             raise ValueError('Invalid safety timeout')
         self.mode = mode
