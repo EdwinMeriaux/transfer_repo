@@ -538,6 +538,7 @@ def main(argv=None):
                     print('   boat still moving after 30 s; continuing anyway')
                 if not args.yes:
                     input('   clear water ahead? Enter to run, Ctrl+C to stop ')
+                    rig.spin(1.)                  # messages were not processed while waiting for Enter
                 while (reason := rig.blocker()) is not None:
                     print('   waiting: ' + reason, flush=True)
                     rig.spin(1.)
