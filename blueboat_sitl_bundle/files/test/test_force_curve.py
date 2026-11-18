@@ -162,4 +162,5 @@ def test_cli_build_and_apply(tmp_path, clock, capsys):
     assert fc.main(['apply', str(output), '--interface', str(interface_path)]) == 0
     applied = json.loads(interface_path.read_text())
     assert applied['maximum_force_N'] == 15. and len(applied['left']['force_pwm_points']) == len(fc.FORCES_N)
+    assert applied['maximum_abs_force_N'] == 15.                      # for older MotorAdapter versions
     assert fc.main(['build', str(result), '--max-force', '30']) == 2

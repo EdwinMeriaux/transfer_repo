@@ -290,6 +290,9 @@ def apply(curve_path, interface_path):
         profile[side]['force_pwm_points'] = document['force_pwm_points'][side]
     profile['minimum_force_N'] = document['minimum_force_N']
     profile['maximum_force_N'] = document['maximum_force_N']
+    # Older MotorAdapter versions only read one symmetric cap (it is ignored when the directional
+    # caps above are understood). With an asymmetric cap they allow the larger value both ways.
+    profile['maximum_abs_force_N'] = max(abs(document['minimum_force_N']), document['maximum_force_N'])
     profile['force_curve_file'] = str(curve_path)
     profile['force_curve_sha256'] = sha256(curve_path)
     interface_path.write_text(json.dumps(profile, indent=2) + '\n')
