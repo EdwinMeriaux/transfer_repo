@@ -80,16 +80,24 @@ def test_policy_newtons_become_the_thrust_the_training_model_expects(tmp_path, c
             assert real == pytest.approx(force, abs=.5 + .05 * abs(force)), (force, i, pwm[i], esc)
 
 
-def test_right_reverse_borrows_the_left_slope(tmp_path, clock):
+def test_each_motor_gets_its_own_slope_in_both_directions(tmp_path, clock):
     result, _ = run_thrust_check(tmp_path, clock, scale=1.)
     document, problems = fc.build(result)
     assert problems == []
     maps = document['input_to_esc']
-    assert maps['right_reverse']['slope_from'] == 'left'          # only rev15 drives the right motor backwards
+    assert all(maps[k]['slope_from'] == k.split('_')[0] for k in maps)   # rev10 + rev15: two reverse levels
     assert maps['left_forward']['slope_from'] == 'left'
     # Fake autopilot: forward 390/370 us per us, reverse x1.25 (asymmetry)
     assert maps['left_forward']['esc_us_per_input_us'] == pytest.approx(390 / 370, rel=.03)
     assert maps['left_reverse']['esc_us_per_input_us'] == pytest.approx(1.25 * 390 / 370, rel=.03)
+
+
+def test_a_side_with_one_level_borrows_the_other_sides_slope(tmp_path, clock):
+    result, _ = run_thrust_check(tmp_path, clock, scale=1.,
+                                 steps=['spin10', 'spin15', 'fwd15', 'rev15', 'fwd10', 'left10', 'right10'])
+    document, problems = fc.build(result)
+    assert problems == []
+    assert document['input_to_esc']['right_reverse']['slope_from'] == 'left'   # right reverse only in rev15
 
 
 def test_default_cap_and_voltage(tmp_path, clock):

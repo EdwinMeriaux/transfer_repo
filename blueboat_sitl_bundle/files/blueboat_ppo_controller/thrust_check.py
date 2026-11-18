@@ -95,13 +95,16 @@ def expected(left, right):
 
 STEPS = {
     # name: (left N, right N, seconds, what it shows)
-    'spin10': (-10., 10., 15., 'spin in place: both motors, opposite directions'),
-    'spin15': (-15., 15., 15., 'spin in place at 15 N'),
-    'left10': (10., 0., 15., 'left motor alone forward (gentle right curve)'),
-    'right10': (0., 10., 15., 'right motor alone forward (gentle left curve)'),
-    'fwd10': (10., 10., 15., 'straight ahead, 10 N per motor'),
-    'rev15': (-15., -15., 15., 'straight back, 15 N per motor'),
-    'fwd15': (15., 15., 15., 'straight ahead, 15 N per motor'),
+    # Out-and-back order for a small pond: every forward run is followed by a reverse run, so the
+    # boat stays within ~16 m of the start (training-model speeds, 8 s steps, coasting included).
+    'spin10': (-10., 10., 8., 'spin in place: both motors, opposite directions'),
+    'spin15': (-15., 15., 8., 'spin in place at 15 N'),
+    'fwd15': (15., 15., 8., 'straight ahead, 15 N per motor'),
+    'rev15': (-15., -15., 8., 'straight back, 15 N per motor'),
+    'fwd10': (10., 10., 8., 'straight ahead, 10 N per motor'),
+    'rev10': (-10., -10., 8., 'straight back, 10 N per motor'),
+    'left10': (10., 0., 8., 'left motor alone forward (gentle right curve)'),
+    'right10': (0., 10., 8., 'right motor alone forward (gentle left curve)'),
 }
 
 
@@ -453,7 +456,7 @@ def run_step(rig, table, name, left, right, seconds, max_speed, max_yaw, log):
             rig.release()
     if reason:
         return dict(step=name, left_N=left, right_N=right, stopped=reason)
-    result = summarize(name, rows, left, right)
+    result = summarize(name, rows, left, right, settle_window_s=min(5., seconds - 5.))   # skip trim + acceleration
     result['learned_servo_forward_sign'] = [t.servo_sign for t in trims]
     return result
 

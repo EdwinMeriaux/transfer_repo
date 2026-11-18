@@ -4,17 +4,20 @@ One run, about 5 minutes on the water. It checks whether the boat responds like 
 
 Each step holds a fixed thrust per motor. Newtons are converted to ESC PWM with Blue Robotics' published T200 data (`blueboat_ppo_controller/data/t200_thrust_N.csv`), at the battery voltage MAVROS reports. The tool then trims the RC input until `/mavros/rc/out` shows that PWM, so ArduPilot's mixing, trims and `MOT_THST_ASYM` are accounted for without being modelled. The expected speeds and turn rates are from the policy's README (its training model).
 
-| Step | Left, right (N) | Expected | Space needed |
+| Step | Left, right (N) | Expected | Boat travels |
 |---|---|---|---|
-| `spin10` | −10, +10 | 0.59 rad/s turning left | none |
-| `spin15` | −15, +15 | 0.83 rad/s | none |
-| `left10` | 10, 0 | 0.91 m/s, slow right curve | ~15 m |
-| `right10` | 0, 10 | 0.91 m/s, slow left curve | ~15 m |
-| `fwd10` | 10, 10 | 1.41 m/s | ~25 m |
-| `rev15` | −15, −15 | −1.79 m/s | ~30 m |
-| `fwd15` | 15, 15 | ~1.79 m/s (interpolated) | ~30 m |
+| `spin10` | −10, +10 | 0.59 rad/s turning left | stays put |
+| `spin15` | −15, +15 | 0.83 rad/s | stays put |
+| `fwd15` | 15, 15 | ~1.79 m/s (interpolated) | ~16 m out |
+| `rev15` | −15, −15 | −1.79 m/s | ~16 m back to the start |
+| `fwd10` | 10, 10 | 1.41 m/s | ~13 m out |
+| `rev10` | −10, −10 | −1.41 m/s (interpolated) | ~13 m back |
+| `left10` | 10, 0 | 0.91 m/s, slow right curve | ~8 m out |
+| `right10` | 0, 10 | 0.91 m/s, slow left curve | ~8 m further |
 
-Each step lasts 15 s. The result is the mean over its last 5 s, and the tool flags a step if the boat is still speeding up.
+Each step lasts 8 s; the result is the mean over its last 3 s, after the RC trim has settled and the boat has reached speed. The tool flags a step if the boat is still speeding up (`--seconds 10` makes every step longer).
+
+**Space: about 20 m of clear water in a straight line ahead of the boat.** The order is out and back, so the boat stays within about 16 m of where it starts, coasting included, if it is as fast as the training model (a slower boat travels less). Start with the boat at one end, pointed along the long side.
 
 ## Run
 
@@ -65,7 +68,7 @@ How each policy force F becomes an RC input, per motor:
 1. **Thrust scale.** F is divided by the thrust check's scale for that direction (forward or reverse). The real boat then responds to F the way the training model did. `--no-scale` uses the T200 data alone.
 2. **T200 data.** The force is converted to ESC PWM at `--voltage`, 15.0 V by default.
 3. **Measured mapping.** The ESC PWM is converted to RC input with the mapping the thrust check measured: RC input sent against ESC PWM seen on `/mavros/rc/out`, settled at the end of each step. This mapping is a straight line per motor and direction.
-   - The right motor only runs in reverse in `rev15`, so it borrows the left motor's reverse slope; the RC and SERVO settings are identical on both sides.
+   - Each motor gets its own line per direction from two thrust levels. If a step is missing, a motor with only one level borrows the other motor's slope (the RC and SERVO settings are identical on both sides).
 
 **Thrust cap.** The cap defaults to ±15 N per motor (`--max-force`, `--min-force`). The policy can still ask for up to 25 N, but the PPO node clips to the cap. The curve still goes up to 25 N, because the node requires that; those rows are marked "above cap, not sent".
 
